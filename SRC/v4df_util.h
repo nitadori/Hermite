@@ -67,14 +67,22 @@ static inline dvec3 v4df_to_dvec3(const v4df vec){
 }
 
 struct v4df_bcast{
-	v4df e0,e1, e2, e3;
+	v4df e0, e1, e2, e3;
 	v4df_bcast(const v4df *ptr){
+#ifdef __AVX2__
+		v4df tmp = *ptr;
+		e0 =  __builtin_ia32_permdf256(tmp, 0x00);
+		e1 =  __builtin_ia32_permdf256(tmp, 0x55);
+		e2 =  __builtin_ia32_permdf256(tmp, 0xaa);
+		e3 =  __builtin_ia32_permdf256(tmp, 0xff);
+#else
 		const v4df tmp0 = __builtin_ia32_vbroadcastf128_pd256((const v2df*)(ptr) + 0);
 		const v4df tmp1 = __builtin_ia32_vbroadcastf128_pd256((const v2df*)(ptr) + 1);
 		e0 = __builtin_ia32_vpermilpd256(tmp0, 0x0);
 		e1 = __builtin_ia32_vpermilpd256(tmp0, 0xf);
 		e2 = __builtin_ia32_vpermilpd256(tmp1, 0x0);
 		e3 = __builtin_ia32_vpermilpd256(tmp1, 0xf);
+#endif
 
 	}
 };

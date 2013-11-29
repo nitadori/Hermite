@@ -11,6 +11,9 @@ typedef double v2df __attribute__((vector_size(16)));
 #warning AVX is available
 typedef double v4df __attribute__((vector_size(32)));
 #endif
+#ifdef __AVX2__
+#warning AVX2 is available
+#endif
 #ifdef __HPC_ACE__
 #warning HPC-ACE is available
 #include <fjcex.h>
