@@ -3,7 +3,7 @@ VPATH = ../SRC
 CXX = g++-4.8.1
 CXXFLAGS = -Wall -O2
 CXXFLAGS += -march=core-avx2
-CXXFLAGS += -march=bdver2
+#CXXFLAGS += -march=bdver2
 CXXFLAGS += -fopenmp
 #CXXFLAGS += -ffast-math
 
