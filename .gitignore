@@ -1,0 +1,7 @@
+# vim temporary
+.*.sw?
+*~
+#objects
+*.o
+#executable
+*-?th
