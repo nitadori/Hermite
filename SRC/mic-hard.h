@@ -1,0 +1,5 @@
+enum{
+	MIC_NCORE = 60,
+	MIC_NSMT  =  4,
+	MIC_NTHRE = MIC_NCORE * MIC_NSMT,
+};

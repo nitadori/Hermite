@@ -7,7 +7,7 @@ static inline __m512d loadbcast2f256(const void *ptr, const int hint=0){
 
 #if 1
 static inline __m512d loadu_pd(const void *ptr){
-	__m512d ret;
+	__m512d ret = _mm512_undefined_pd();
 	ret = _mm512_loadunpacklo_pd(ret, (const double *)ptr + 0);
 	ret = _mm512_loadunpackhi_pd(ret, (const double *)ptr + 8);
 	return ret;

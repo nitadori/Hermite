@@ -3,6 +3,7 @@
 // #include <iostream>
 #include <micvec.h>
 #include "mic-util.h"
+#include "mic-hard.h"
 
 static inline void prefetch_ptcl(const Particle &p){
 	const char *addr = (const char *)&p;
@@ -130,20 +131,20 @@ struct Gravity{
 			Force        force[] )
 	{
 		const int nbody = this->nbody;
-		static __m512d fpart[NIFORCE][60];
+		static __m512d fpart[NIFORCE][MIC_NCORE];
 #pragma omp parallel
 		{
 			const int nth = omp_get_num_threads();
 			const int tid = omp_get_thread_num();
-			assert(240 == nth);
-			const int xid = tid%4;
-			const int yid = tid/4;
+			assert(MIC_NTHRE == nth);
+			const int xid = tid % MIC_NSMT;
+			const int yid = tid / MIC_NSMT;
 
-			const int iibeg = aligned_division(ni, xid+0, 4, 4);
-			const int iiend = aligned_division(ni, xid+1, 4, 4);
+			const int iibeg = aligned_division(ni, xid+0, MIC_NSMT, 4);
+			const int iiend = aligned_division(ni, xid+1, MIC_NSMT, 4);
 
-			const int jbeg = aligned_division(nbody, yid+0, 60, 2);
-			const int jend = aligned_division(nbody, yid+1, 60, 2);
+			const int jbeg = aligned_division(nbody, yid+0, MIC_NCORE, 2);
+			const int jend = aligned_division(nbody, yid+1, MIC_NCORE, 2);
 
 			const F64vec8 eps2(deps2);
 			F64vec8 coef(-3.0, 1.0, 0.5, 0.375);
@@ -268,7 +269,7 @@ struct Gravity{
 #pragma omp parallel for
 		for(int ii=0; ii<nif; ii++){
 			F64vec8 sum(0.0);
-			for(int j=0; j<60; j++){
+			for(int j=0; j<MIC_NCORE; j++){
 				sum += F64vec8(fpart[ii][j]);
 			}
 			((__m512d *)(&force[is]))[ii] = sum;
