@@ -250,8 +250,8 @@ struct Gravity{
 		pred = allocate<GPredictor, 64> (nbody);
 	}
 	~Gravity(){
-		free(ptcl);
-		free(pred);
+		deallocate<GParticle,  64> (ptcl);
+		deallocate<GPredictor, 64> (pred);
 	}
 
 	void set_jp(const int addr, const Particle &p){

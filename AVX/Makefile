@@ -13,17 +13,17 @@ avx: avx-4th avx-6th avx-8th
 TOUCH: Makefile
 	touch TOUCH
 
-cpu-4th: compile.cpp nbodysystem.h hermite4.h TOUCH
-	$(CXX) $(CXXFLAGS) -DFOURTH $< -o $@
+cpu-4th: compile.cpp nbodysystem.h hermite4.h parameter.o TOUCH
+	$(CXX) $(CXXFLAGS) -DFOURTH $< parameter.o -o $@
 
-cpu-6th: compile.cpp nbodysystem.h hermite6.h TOUCH
-	$(CXX) $(CXXFLAGS) -DSIXTH $< -o $@
+cpu-6th: compile.cpp nbodysystem.h hermite6.h parameter.o TOUCH
+	$(CXX) $(CXXFLAGS) -DSIXTH $< parameter.o -o $@
 
-cpu-6th.s: compile.cpp nbodysystem.h hermite6.h TOUCH
-	$(CXX) $(CXXFLAGS) -DSIXTH -S $< -o $@
+cpu-6th.s: compile.cpp nbodysystem.h hermite6.h parameter.o TOUCH
+	$(CXX) $(CXXFLAGS) -DSIXTH -S $< parameter.o -o $@
 
-cpu-8th: compile.cpp nbodysystem.h hermite8.h TOUCH
-	$(CXX) $(CXXFLAGS) -DEIGHTH $< -o $@
+cpu-8th: compile.cpp nbodysystem.h hermite8.h parameter.o TOUCH
+	$(CXX) $(CXXFLAGS) -DEIGHTH $< parameter.o -o $@
 
 cpu-8dd: compile.cpp nbodysystem.h hermite8dd.h TOUCH
 	$(CXX) $(CXXFLAGS) -DEIGHTHDD $< -o $@
