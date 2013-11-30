@@ -103,7 +103,7 @@ struct Profile{
 			const long num_step_tot,
 			const long num_bstep_tot,
 			FILE *fp = stderr,
-			const char *fmt = " %s : %e sec, %e usec\n")
+			const char *fmt = " %s : %e sec, %e usec : %6.2f %%\n")
 	{
 		const long ns  = num_step_tot  - num_step_prev;
 		const long nbs = num_bstep_tot - num_bstep_prev;
@@ -115,7 +115,10 @@ struct Profile{
 			time[MISC] -= time[i];
 		}
 		for(int i=0; i<NUM_ELEM; i++){
-			fprintf(fp, fmt, name(i), time[i], time[i]*(1.e6/nbs));
+			fprintf(fp, fmt, name(i), 
+					time[i], 
+					time[i] * (1.e6/nbs),
+					100.0 * time[i] / time[TOTAL]);
 		}
 
 		const double nact   = double(ns) / double(nbs);
@@ -476,7 +479,7 @@ struct NbodySystem{
 					else                break;
 				}
 				std::swap(dtbuf[i], dtbuf[j]);
-#ifdef __MIC__
+#ifdef MIC_GRAVITY
 				const VParticle pi(&ptcl[i]);
 				const VParticle pj(&ptcl[j]);
 				pi.store(&ptcl[j]);
