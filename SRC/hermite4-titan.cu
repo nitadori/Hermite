@@ -58,13 +58,50 @@ void Gravity::predict_all(const double tsys){
 	ptcl.htod(njpsend);
 	
 	const int nblock = (nbody/NTHREAD) + 
-		((nbody%NTHREAD) ? 1 : 0);
+	                  ((nbody%NTHREAD) ? 1 : 0);
 	predict_kernel <<<nblock, NTHREAD>>>
 		(nbody, ptcl, pred, tsys);
 
 	pred.dtoh();
 	puts("pred all done");
 	exit(1);
+}
+
+enum{
+	NJBLOCK = Gravity::NJBLOCK,
+};
+
+__global__ void force_kernel(
+		const int                  is,
+		const int                  ie,
+		const int                  nj,
+		const Gravity::GPredictor *pred,
+		const double               eps2,
+		Gravity::GForce          (*fo)[NJBLOCK])
+{
+}
+
+__global__ void reduce_kernel(
+		const Gravity::GForce (*fpart)[NJBLOCK],
+		Gravity::GForce        *ftot)
+{
+}
+
+void Gravity::calc_force_in_range(
+	   	const int    is,
+		const int    ie,
+		const double eps2,
+		Force        force[] )
+{
+	const int ni = ie - is;
+	const int niblock = (ni/NTHREAD) + 
+	                   ((ni%NTHREAD) ? 1 : 0);
+	dim3 grid(niblock, NJBLOCK, 1);
+	force_kernel <<<grid, NTHREAD>>>
+		(is, ie, nbody, pred, eps2, fpart);
+
+	reduce_kernel <<<ni, NJREDUCE>>>
+		(fpart, ftot);
 }
 
 #include "pot-titan.hu"

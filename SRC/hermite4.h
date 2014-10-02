@@ -257,6 +257,8 @@ static inline void swap(Particle &a, Particle &b){
 #include "hermite4-k.h"
 #elif defined MIC_GRAVITY
 #include "hermite4-mic.h"
+#elif defined CUDA_TITAN
+#include "hermite4-titan.h"
 #else
 struct Gravity{
 	typedef Particle GParticle;

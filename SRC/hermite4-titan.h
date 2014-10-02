@@ -83,10 +83,22 @@ struct Gravity{
 			const double eps2,
 			Force        force[] )
 	{
+		for(int ii=0; ii<nact; ii+=NIMAX){
+			const int ni = (nact-ii) < NIMAX ? (nact-ii) : NIMAX;
+			calc_force_in_range(ii, ii+ni, eps2, force);
+		}
+
 		njpsend = nact;
 	}
 
 	void calc_potential(
 			const double eps2,
 			double       potbuf[] );
+
+private:
+	void calc_force_in_range(
+			const int    is,
+			const int    ie,
+			const double eps2,
+			Force        force[] );
 };

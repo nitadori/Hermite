@@ -5,7 +5,7 @@ CXXFLAGS += -march=core2 -mavx
 CXXFLAGS += -fopenmp
 CXXFLAGS += -I /usr/local/cuda/include -I/usr/local/cuda/samples/common/inc
 NVCC = /usr/local/cuda/bin/nvcc
-NVFLAGS = -O -arch=sm_35
+NVFLAGS = -O -arch=sm_35 -Xptxas -v
 LIBCUDA = -L /usr/local/cuda/lib64 -lcudart
 
 all : gpu-4th
