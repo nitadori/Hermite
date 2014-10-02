@@ -1,0 +1,63 @@
+__global__ void pot_kernel(
+		const int      nbody,
+		const double4 *posm,
+		double        *pot,
+		const double   eps2)
+{
+	const int tid = threadIdx.x + blockDim.x * blockIdx.x;
+	if(tid < nbody){
+		const double xi = posm[tid].x;
+		const double yi = posm[tid].y;
+		const double zi = posm[tid].z;
+
+		double sum = 0.0;
+
+#pragma unroll 4
+		for(int j=0; j<nbody; j++){
+			const double dx = posm[j].x - xi;
+			const double dy = posm[j].y - yi;
+			const double dz = posm[j].z - zi;
+			const double mj = posm[j].w;
+
+			const double r2 = eps2 + dx*dx + dy*dy + dz*dz;
+			double rinv = rsqrt(r2);
+			if(j == tid) rinv = 0.0;
+			sum -= mj * rinv;
+		}
+
+		pot[tid] = sum;
+	}
+}
+
+void Gravity::calc_potential(
+		const double eps2,
+		double       potbuf[] )
+{
+	cudaPointer<double4> posm;
+	cudaPointer<double > pot;
+	posm.allocate(nbody);
+	pot .allocate(nbody);
+
+	const int nbody = this->nbody;
+	for(int i=0; i<nbody; i++){
+		posm[i].x = ptcl[i].pos.x;
+		posm[i].y = ptcl[i].pos.y;
+		posm[i].z = ptcl[i].pos.z;
+		posm[i].w = ptcl[i].mass;
+	}
+	posm.htod();
+
+	const int nblock = (nbody/NTHREAD) + 
+		((nbody%NTHREAD) ? 1 : 0);
+	pot_kernel <<<nblock, NTHREAD>>>
+		(nbody, posm, pot, eps2);
+
+	pot.dtoh();
+	for(int i=0; i<nbody; i++){
+		potbuf[i] = pot[i];
+	}
+
+	posm.free();
+	pot .free();
+	puts("calc pot done");
+}
