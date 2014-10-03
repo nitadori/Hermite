@@ -13,6 +13,7 @@ __global__ void predict_kernel(
 	const int tid = threadIdx.x + blockDim.x * blockIdx.x;
 	if(tid < nbody){
 		Gravity::GParticle   p  = ptcl[tid];
+		// const Gravity::GParticle &p  = ptcl[tid];
 		Gravity::GPredictor &pr = pred[tid];
 
 		const double dt = tsys - p.tlast;
@@ -56,10 +57,13 @@ __global__ void predict_kernel(
 
 void Gravity::predict_all(const double tsys){
 	ptcl.htod(njpsend);
+	// printf("sent %d stars\n", njpsend);
+
+	const int ntpred = 256;
 	
-	const int nblock = (nbody/NTHREAD) + 
-	                  ((nbody%NTHREAD) ? 1 : 0);
-	predict_kernel <<<nblock, NTHREAD>>>
+	const int nblock = (nbody/ntpred) + 
+	                  ((nbody%ntpred) ? 1 : 0);
+	predict_kernel <<<nblock, ntpred>>>
 		(nbody, ptcl, pred, tsys);
 
 	pred.dtoh();

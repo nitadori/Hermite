@@ -127,6 +127,13 @@ struct Profile{
 		fprintf(stdout, "## nbody  wtime(sec)  Gflops  wtime/block(usec)  nact\n");
 		fprintf(stdout, "## %ld %e %e %e %e\n",
 				nbody, wtime, Gflops, wtime/nbs*1.e6, nact);
+#if 1
+		size_t nread  = nbs * (nbody * sizeof(Gravity::GParticle));
+		size_t nwrite = nbs * (nbody * sizeof(Gravity::GPredictor));
+		double bandwidth = (nread + nwrite) / time[PREDICT];
+		fprintf(stdout, "prediction bandwidth = %f GB/s\n",
+				bandwidth * 1.e-9);
+#endif
 	}
 
 	static double wtime(){
