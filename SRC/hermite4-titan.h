@@ -44,7 +44,7 @@ struct Gravity{
 
 	Gravity(const int _nbody) : nbody(_nbody) {
 		ptcl .allocate(nbody);
-		pred .allocate(nbody);
+		pred .allocate(nbody + NTHREAD);
 		fpart.allocate(NIMAX);
 		ftot .allocate(NIMAX);
 

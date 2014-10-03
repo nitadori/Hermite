@@ -70,6 +70,40 @@ enum{
 	NJBLOCK = Gravity::NJBLOCK,
 };
 
+__device__ __forceinline__ void pp_interact(
+		const Gravity::GPredictor &ipred,
+		const Gravity::GPredictor &jpred,
+		const double                eps2,
+		double3                    &acc,
+		double3                    &jrk)
+{
+		const double dx  = jpred.pos.x - ipred.pos.x;
+		const double dy  = jpred.pos.y - ipred.pos.y;
+		const double dz  = jpred.pos.z - ipred.pos.z;
+		const double dvx = jpred.vel.x - ipred.vel.x;
+		const double dvy = jpred.vel.y - ipred.vel.y;
+		const double dvz = jpred.vel.z - ipred.vel.z;
+		const double mj  = jpred.mass;
+
+		const double dr2  = eps2 + dx*dx + dy*dy + dz*dz;
+		const double drdv = dx*dvx + dy*dvy + dz*dvz;
+
+		const double rinv1 = rsqrt(dr2);
+		const double rinv2 = rinv1 * rinv1;
+		const double mrinv3 = mj * rinv1 * rinv2;
+
+		double alpha = drdv * rinv2;
+		alpha *= -3.0;
+
+		acc.x += mrinv3 * dx;
+		acc.y += mrinv3 * dy;
+		acc.z += mrinv3 * dz;
+		jrk.x += mrinv3 * (dvx + alpha * dx);
+		jrk.y += mrinv3 * (dvy + alpha * dy);
+		jrk.z += mrinv3 * (dvz + alpha * dz);
+}
+
+#if 0  // first version
 __global__ void force_kernel(
 		const int                  is,
 		const int                  ie,
@@ -93,37 +127,73 @@ __global__ void force_kernel(
 #pragma unroll 4
 		for(int j=js; j<je; j++){
 			const Gravity::GPredictor &jpred = pred[j];
+			pp_interact(ipred, jpred, eps2, acc, jrk);
 			
-			const double dx  = jpred.pos.x - ipred.pos.x;
-			const double dy  = jpred.pos.y - ipred.pos.y;
-			const double dz  = jpred.pos.z - ipred.pos.z;
-			const double dvx = jpred.vel.x - ipred.vel.x;
-			const double dvy = jpred.vel.y - ipred.vel.y;
-			const double dvz = jpred.vel.z - ipred.vel.z;
-			const double mj  = jpred.mass;
-
-			const double dr2  = eps2 + dx*dx + dy*dy + dz*dz;
-			const double drdv = dx*dvx + dy*dvy + dz*dvz;
-
-			const double rinv1 = rsqrt(dr2);
-			const double rinv2 = rinv1 * rinv1;
-			const double mrinv3 = mj * rinv1 * rinv2;
-
-			double alpha = drdv * rinv2;
-			alpha *= -3.0;
-
-			acc.x += mrinv3 * dx;
-			acc.y += mrinv3 * dy;
-			acc.z += mrinv3 * dz;
-			jrk.x += mrinv3 * (dvx + alpha * dx);
-			jrk.y += mrinv3 * (dvy + alpha * dy);
-			jrk.z += mrinv3 * (dvz + alpha * dz);
 		}
 
 		fo[xid][yid].acc = acc;
 		fo[xid][yid].jrk = jrk;
 	}
 }
+#else
+__global__ void force_kernel(
+		const int                  is,
+		const int                  ie,
+		const int                  nj,
+		const Gravity::GPredictor *pred,
+		const double               eps2,
+		Gravity::GForce          (*fo)[NJBLOCK])
+{
+	const int tid = threadIdx.x;
+	const int xid = threadIdx.x + blockDim.x * blockIdx.x;
+	const int yid = blockIdx.y;
+
+	const int js = ((0 + yid) * nj) / NJBLOCK;
+	const int je = ((1 + yid) * nj) / NJBLOCK;
+	const int je8 = js + 8*((je-js)/8);
+
+	const int i = is + xid;
+
+	__shared__ Gravity::GPredictor jpsh[8];
+
+	const Gravity::GPredictor ipred = pred[i];
+	double3 acc = make_double3(0.0, 0.0, 0.0);
+	double3 jrk = make_double3(0.0, 0.0, 0.0);
+
+	for(int j=js; j<je8; j+=8){
+		const double *src = (const double *)(pred + j);
+		double       *dst = (double *      )(jpsh);
+		__syncthreads();
+		if(tid < 56 /*sizeof(jpsh)/sizeof(double)*/){
+			dst[tid] = src[tid];
+		}
+		__syncthreads();
+#pragma unroll
+		for(int jj=0; jj<8; jj++){
+			// const Gravity::GPredictor &jpred = pred[j+jj];
+			const Gravity::GPredictor &jpred = jpsh[jj];
+			pp_interact(ipred, jpred, eps2, acc, jrk);
+		}
+	}
+	const double *src = (const double *)(pred + je8);
+	double       *dst = (double *      )(jpsh);
+	__syncthreads();
+	if(tid < 56 /*sizeof(jpsh)/sizeof(double)*/){
+		dst[tid] = src[tid];
+	}
+	__syncthreads();
+	for(int j=je8; j<je; j++){
+		// const Gravity::GPredictor &jpred = pred[j];
+		const Gravity::GPredictor &jpred = jpsh[j - je8];
+		pp_interact(ipred, jpred, eps2, acc, jrk);
+	}
+
+	if(i < ie){
+		fo[xid][yid].acc = acc;
+		fo[xid][yid].jrk = jrk;
+	}
+}
+#endif
 
 __device__ double shfl_xor(const double x, const int bit){
 	const int hi = __shfl_xor(__double2hiint(x), bit);
@@ -174,6 +244,7 @@ void Gravity::calc_force_in_range(
 		const double eps2,
 		Force        force[] )
 {
+	assert(56 == sizeof(GPredictor));
 	const int ni = ie - is;
 	{
 		const int niblock = (ni/NTHREAD) + 
