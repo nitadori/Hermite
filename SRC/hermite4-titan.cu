@@ -16,8 +16,8 @@ __global__ void predict_kernel(
 		Gravity::GPredictor &pr = pred[tid];
 
 		const double dt = tsys - p.tlast;
-		const double dt2 = (1./2.) * dt;;
-		const double dt3 = (1./3.) * dt;;
+		const double dt2 = (1./2.) * dt;
+		const double dt3 = (1./3.) * dt;
 
 		double3 pos, vel;
 		pos.x = 
@@ -63,7 +63,7 @@ void Gravity::predict_all(const double tsys){
 		(nbody, ptcl, pred, tsys);
 
 	pred.dtoh();
-	puts("pred all done");
+	// puts("pred all done");
 }
 
 enum{
@@ -78,6 +78,50 @@ __global__ void force_kernel(
 		const double               eps2,
 		Gravity::GForce          (*fo)[NJBLOCK])
 {
+	const int xid = threadIdx.x + blockDim.x * blockIdx.x;
+	const int yid = blockIdx.y;
+
+	const int js = ((0 + yid) * nj) / NJBLOCK;
+	const int je = ((1 + yid) * nj) / NJBLOCK;
+
+	const int i = is + xid;
+	if(i < ie){
+		const Gravity::GPredictor ipred = pred[i];
+		double3 acc = make_double3(0.0, 0.0, 0.0);
+		double3 jrk = make_double3(0.0, 0.0, 0.0);
+
+		for(int j=js; j<je; j++){
+			const Gravity::GPredictor &jpred = pred[j];
+			
+			const double dx  = jpred.pos.x - ipred.pos.x;
+			const double dy  = jpred.pos.y - ipred.pos.y;
+			const double dz  = jpred.pos.z - ipred.pos.z;
+			const double dvx = jpred.vel.x - ipred.vel.x;
+			const double dvy = jpred.vel.y - ipred.vel.y;
+			const double dvz = jpred.vel.z - ipred.vel.z;
+			const double mj  = jpred.mass;
+
+			const double dr2  = eps2 + dx*dx + dy*dy + dz*dz;
+			const double drdv = dx*dvx + dy*dvy + dz*dvz;
+
+			const double rinv1 = rsqrt(dr2);
+			const double rinv2 = rinv1 * rinv1;
+			const double mrinv3 = mj * rinv1 * rinv2;
+
+			double alpha = drdv * rinv2;
+			alpha *= -3.0;
+
+			acc.x += mrinv3 * dx;
+			acc.y += mrinv3 * dy;
+			acc.z += mrinv3 * dz;
+			jrk.x += mrinv3 * (dvx + alpha * dx);
+			jrk.y += mrinv3 * (dvy + alpha * dy);
+			jrk.z += mrinv3 * (dvz + alpha * dz);
+		}
+
+		fo[xid][yid].acc = acc;
+		fo[xid][yid].jrk = jrk;
+	}
 }
 
 __device__ double shfl_xor(const double x, const int bit){
@@ -121,11 +165,13 @@ void Gravity::calc_force_in_range(
 		Force        force[] )
 {
 	const int ni = ie - is;
-	const int niblock = (ni/NTHREAD) + 
-	                   ((ni%NTHREAD) ? 1 : 0);
-	dim3 grid(niblock, NJBLOCK, 1);
-	force_kernel <<<grid, NTHREAD>>>
-		(is, ie, nbody, pred, eps2, fpart);
+	{
+		const int niblock = (ni/NTHREAD) + 
+						   ((ni%NTHREAD) ? 1 : 0);
+		dim3 grid(niblock, NJBLOCK, 1);
+		force_kernel <<<grid, NTHREAD>>>
+			(is, ie, nbody, pred, eps2, fpart);
+	}
 
 	{
 		const int nwarp = 32;
@@ -133,6 +179,16 @@ void Gravity::calc_force_in_range(
 		assert(6 == nword);
 		reduce_kernel <<<ni, dim3(nwarp, nword, 1)>>>
 			(fpart, ftot);
+	}
+
+	ftot.dtoh(ni);
+	for(int i=0; i<ni; i++){
+		force[is+i].acc.x = ftot[i].acc.x;
+		force[is+i].acc.y = ftot[i].acc.y;
+		force[is+i].acc.z = ftot[i].acc.z;
+		force[is+i].jrk.x = ftot[i].jrk.x;
+		force[is+i].jrk.y = ftot[i].jrk.y;
+		force[is+i].jrk.z = ftot[i].jrk.z;
 	}
 }
 

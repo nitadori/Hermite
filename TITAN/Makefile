@@ -30,7 +30,7 @@ hermite4-titan.ptx: hermite4-titan.cu hermite4-titan.h hermite4.h
 	$(NVCC) $(NVFLAGS) -ptx $<
 
 hermite4-titan.cubin: hermite4-titan.cu hermite4-titan.h hermite4.h
-	$(NVCC) $(NVFLAGS) -cubin $<
+	$(NVCC) $(NVFLAGS) -cubin $< |& c++filt
 
 hermite4-titan.sass: hermite4-titan.cubin
 	/usr/local/cuda/bin/cuobjdump -sass $< | c++filt > $@

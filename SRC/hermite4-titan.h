@@ -90,8 +90,10 @@ struct Gravity{
 
 		njpsend = nact;
 
-		puts("init force done");
-		exit(0);
+		// printf("computed nact=%d\n", nact);
+
+		// puts("init force done");
+		// exit(0);
 	}
 
 	void calc_potential(
