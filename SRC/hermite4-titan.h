@@ -89,6 +89,9 @@ struct Gravity{
 		}
 
 		njpsend = nact;
+
+		puts("init force done");
+		exit(0);
 	}
 
 	void calc_potential(

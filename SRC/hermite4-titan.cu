@@ -64,7 +64,6 @@ void Gravity::predict_all(const double tsys){
 
 	pred.dtoh();
 	puts("pred all done");
-	exit(1);
 }
 
 enum{
@@ -81,10 +80,38 @@ __global__ void force_kernel(
 {
 }
 
+__device__ double shfl_xor(const double x, const int bit){
+	const int hi = __shfl_xor(__double2hiint(x), bit);
+	const int lo = __shfl_xor(__double2loint(x), bit);
+	return __hiloint2double(hi, lo);
+}
+
+__device__ double warp_reduce_double(double x){
+	x += shfl_xor(x, 16);
+	x += shfl_xor(x,  8);
+	x += shfl_xor(x,  4);
+	x += shfl_xor(x,  2);
+	x += shfl_xor(x,  1);
+	return x;
+}
+
 __global__ void reduce_kernel(
 		const Gravity::GForce (*fpart)[NJBLOCK],
 		Gravity::GForce        *ftot)
 {
+	const int bid = blockIdx.x;  // for particle
+	const int xid = threadIdx.x; // for 30 partial force
+	const int yid = threadIdx.y; // for 6 elements of Force
+
+	const Gravity::GForce &fsrc = fpart[bid][xid];
+	const double          *dsrc = (const double *)(&fsrc);
+	
+	const double x = xid<NJBLOCK ? dsrc[yid] : 0.0;
+	const double y = warp_reduce_double(x);
+
+	Gravity::GForce &fdst = ftot[bid];
+	double          *ddst = (double *)(&fdst);
+	if(0==xid) ddst[yid] = y;
 }
 
 void Gravity::calc_force_in_range(
@@ -100,8 +127,13 @@ void Gravity::calc_force_in_range(
 	force_kernel <<<grid, NTHREAD>>>
 		(is, ie, nbody, pred, eps2, fpart);
 
-	reduce_kernel <<<ni, NJREDUCE>>>
-		(fpart, ftot);
+	{
+		const int nwarp = 32;
+		const int nword = sizeof(GForce) / sizeof(double);
+		assert(6 == nword);
+		reduce_kernel <<<ni, dim3(nwarp, nword, 1)>>>
+			(fpart, ftot);
+	}
 }
 
 #include "pot-titan.hu"

@@ -10,6 +10,12 @@ LIBCUDA = -L /usr/local/cuda/lib64 -lcudart
 
 all : gpu-4th
 
+ptx : hermite4-titan.ptx
+
+cubin : hermite4-titan.cubin
+
+sass : hermite4-titan.sass
+
 parameter.o: parameter.cpp parameter.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
@@ -19,5 +25,14 @@ gpu-4th: compile.cpp nbodysystem.h hermite4.h hermite4-titan.h parameter.o hermi
 
 hermite4-titan.o: hermite4-titan.cu hermite4-titan.h hermite4.h
 	$(NVCC) $(NVFLAGS) -c $<
+
+hermite4-titan.ptx: hermite4-titan.cu hermite4-titan.h hermite4.h
+	$(NVCC) $(NVFLAGS) -ptx $<
+
+hermite4-titan.cubin: hermite4-titan.cu hermite4-titan.h hermite4.h
+	$(NVCC) $(NVFLAGS) -cubin $<
+
+hermite4-titan.sass: hermite4-titan.cubin
+	/usr/local/cuda/bin/cuobjdump -sass $< | c++filt > $@
 
 
