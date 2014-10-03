@@ -4,19 +4,12 @@
 #include "hermite4.h"
 // #include "hermite4-titan.h"
 
-__global__ void predict_kernel(
-		const int                 nbody,
-		const Gravity::GParticle *ptcl,
-		Gravity::GPredictor      *pred,
-		const double              tsys)
+__device__ __forceinline__ void predict_one(
+		const double             tsys,
+		const Gravity::GParticle &p,
+		Gravity::GPredictor      &pr)
 {
-	const int tid = threadIdx.x + blockDim.x * blockIdx.x;
-	if(tid < nbody){
-		Gravity::GParticle   p  = ptcl[tid];
-		// const Gravity::GParticle &p  = ptcl[tid];
-		Gravity::GPredictor &pr = pred[tid];
-
-		const double dt = tsys - p.tlast;
+		const double dt  = tsys - p.tlast;
 		const double dt2 = (1./2.) * dt;
 		const double dt3 = (1./3.) * dt;
 
@@ -52,8 +45,64 @@ __global__ void predict_kernel(
 		pr.pos  = pos;
 		pr.mass = p.mass;
 		pr.vel  = vel;
+}
+
+#if 1
+__global__ void predict_kernel(
+		const int                 nbody,
+		const Gravity::GParticle *ptcl,
+		Gravity::GPredictor      *pred,
+		const double              tsys)
+{
+	const int tid = threadIdx.x + blockDim.x * blockIdx.x;
+	if(tid < nbody){
+		Gravity::GParticle   p  = ptcl[tid];
+		Gravity::GPredictor &pr = pred[tid];
+		predict_one(tsys, p, pr);
+
 	}
 }
+#else
+// specialized for 32 threads
+__global__ void predict_kernel(
+		const int                 nbody,
+		const Gravity::GParticle *ptcl,
+		Gravity::GPredictor      *pred,
+		const double              tsys)
+{
+	const int tid = threadIdx.x;
+	const int off = blockDim.x * blockIdx.x;
+
+	__shared__ Gravity::GParticle pshare[32];
+	Gravity::GPredictor *prbuf = (Gravity::GPredictor *)pshare;
+
+	{
+		const double2 *src = (const double2 *)(ptcl+off);
+		double2 *dst = (double2 *)(pshare);
+		dst[  0 + tid] = src[  0 + tid];
+		dst[ 32 + tid] = src[ 32 + tid];
+		dst[ 64 + tid] = src[ 64 + tid];
+		dst[ 96 + tid] = src[ 96 + tid];
+		dst[128 + tid] = src[128 + tid];
+		dst[160 + tid] = src[160 + tid];
+		dst[192 + tid] = src[192 + tid];
+	}
+	Gravity::GPredictor pr;
+	predict_one(tsys, pshare[tid], pr);
+	prbuf[tid] = pr;
+	{
+		const double *src = (const double *)(prbuf);
+		double *dst = (double *)(pred + off);
+		dst[  0 + tid] = src[  0 + tid];
+		dst[ 32 + tid] = src[ 32 + tid];
+		dst[ 64 + tid] = src[ 64 + tid];
+		dst[ 96 + tid] = src[ 96 + tid];
+		dst[128 + tid] = src[128 + tid];
+		dst[160 + tid] = src[160 + tid];
+		dst[192 + tid] = src[192 + tid];
+	}
+}
+#endif
 
 void Gravity::predict_all(const double tsys){
 	ptcl.htod(njpsend);
@@ -66,7 +115,7 @@ void Gravity::predict_all(const double tsys){
 	predict_kernel <<<nblock, ntpred>>>
 		(nbody, ptcl, pred, tsys);
 
-	pred.dtoh();
+	// pred.dtoh(); // THIS DEBUGGING LINE WAS THE BOTTLENECK
 	// puts("pred all done");
 }
 
