@@ -90,6 +90,7 @@ __global__ void force_kernel(
 		double3 acc = make_double3(0.0, 0.0, 0.0);
 		double3 jrk = make_double3(0.0, 0.0, 0.0);
 
+#pragma unroll 4
 		for(int j=js; j<je; j++){
 			const Gravity::GPredictor &jpred = pred[j];
 			
@@ -155,7 +156,16 @@ __global__ void reduce_kernel(
 
 	Gravity::GForce &fdst = ftot[bid];
 	double          *ddst = (double *)(&fdst);
-	if(0==xid) ddst[yid] = y;
+	if(32 == Gravity::NJREDUCE){
+		if(0==xid) ddst[yid] = y;
+	}
+	if(64 == Gravity::NJREDUCE){
+		// neees inter-warp reduction
+		__shared__ double fsh[6][2];
+		fsh[yid][xid/32] = y;
+		__syncthreads();
+		if(0==xid) ddst[yid] = fsh[yid][0] + fsh[yid][1];
+	}
 }
 
 void Gravity::calc_force_in_range(
@@ -174,10 +184,10 @@ void Gravity::calc_force_in_range(
 	}
 
 	{
-		const int nwarp = 32;
+		// const int nwarp = 32;
 		const int nword = sizeof(GForce) / sizeof(double);
 		assert(6 == nword);
-		reduce_kernel <<<ni, dim3(nwarp, nword, 1)>>>
+		reduce_kernel <<<ni, dim3(NJREDUCE, nword, 1)>>>
 			(fpart, ftot);
 	}
 

@@ -3,8 +3,10 @@
 
 struct Gravity{
 	enum{
-		NJBLOCK  = 30, // for Titan
-		NJREDUCE = 32,
+		// NJBLOCK  = 30, // for Titan
+		// NJREDUCE = 32,
+		NJBLOCK  = 60, // for Titan
+		NJREDUCE = 64,
 		NTHREAD  = 64,
 		NIMAX    = 2048,
 	};
