@@ -256,6 +256,8 @@ struct Particle{
 #include "hermite8-k.h"
 #elif defined MIC_GRAVITY
 #include "hermite8-mic.h"
+#elif defined CUDA_TITAN
+#include "hermite8-titan.h"
 #else
 struct Gravity{
 	typedef Particle GParticle;

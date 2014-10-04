@@ -17,7 +17,6 @@ __device__ __forceinline__ void predict_one(
 
 		double3 pos, vel, acc;
 
-#if 1
 		pos.x = 
 			p.pos.x + dt *(
 			p.vel.x + dt2*(
@@ -39,9 +38,7 @@ __device__ __forceinline__ void predict_one(
 			p.jrk.z + dt4*(
 			p.snp.z + dt5*(
 			p.crk.z )))));
-#endif
 
-#if 1
 		vel.x = 
 			p.vel.x + dt *(
 			p.acc.x + dt2*(
@@ -60,9 +57,7 @@ __device__ __forceinline__ void predict_one(
 			p.jrk.z + dt3*(
 			p.snp.z + dt4*(
 			p.crk.z ))));
-#endif
 
-#if 1
 		acc.x = 
 			p.acc.x + dt *(
 			p.jrk.x + dt2*(
@@ -78,7 +73,6 @@ __device__ __forceinline__ void predict_one(
 			p.jrk.z + dt2*(
 			p.snp.z + dt3*(
 			p.crk.z )));
-#endif
 
 		pr.pos  = pos;
 		pr.mass = p.mass;
@@ -117,7 +111,7 @@ __global__ void predict_kernel(
 	{
 		const double2 *src = (const double2 *)(ptcl+off);
 		double2 *dst = (double2 *)(pshare);
-		// copy 320 DP words
+		// copy 640 DP words
 #pragma unrll
 		for(int i=0; i<10; i++){
 			dst[32*i + tid] = src[32*i + tid];
@@ -129,7 +123,7 @@ __global__ void predict_kernel(
 	{
 		const double *src = (const double *)(prbuf);
 		double *dst = (double *)(pred + off);
-		// copy 160 DP words
+		// copy 320 DP words
 #pragma unrll
 		for(int i=0; i<10; i++){
 			dst[32*i + tid] = src[32*i + tid];
@@ -154,6 +148,7 @@ void Gravity::predict_all(const double tsys){
 	// puts("pred all done");
 	cudaThreadSynchronize(); // for profiling
 }
+
 enum{
 	NJBLOCK = Gravity::NJBLOCK,
 };
