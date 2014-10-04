@@ -120,7 +120,7 @@ __device__ __forceinline__ void predict_one(
 		pr.jrk  = jrk;
 }
 
-#if 1 // naive version
+#if 0 // naive version
 __global__ void predict_kernel(
 		const int                 nbody,
 		const Gravity::GParticle *ptcl,
@@ -187,4 +187,283 @@ void Gravity::predict_all(const double tsys){
 	// puts("pred all done");
 	cudaThreadSynchronize(); // for profiling
 }
+
+enum{
+	NJBLOCK = Gravity::NJBLOCK,
+};
+
+__device__ __forceinline__ void pp_interact(
+		const Gravity::GPredictor &ipred,
+		const Gravity::GPredictor &jpred,
+		const double                eps2,
+		double3                    &acc,
+		double3                    &jrk,
+		double3                    &snp,
+		double3                    &crk)
+{
+		const double dx  = jpred.pos.x - ipred.pos.x;
+		const double dy  = jpred.pos.y - ipred.pos.y;
+		const double dz  = jpred.pos.z - ipred.pos.z;
+
+		const double dvx = jpred.vel.x - ipred.vel.x;
+		const double dvy = jpred.vel.y - ipred.vel.y;
+		const double dvz = jpred.vel.z - ipred.vel.z;
+
+		const double dax = jpred.acc.x - ipred.acc.x;
+		const double day = jpred.acc.y - ipred.acc.y;
+		const double daz = jpred.acc.z - ipred.acc.z;
+
+		const double djx = jpred.jrk.x - ipred.jrk.x;
+		const double djy = jpred.jrk.y - ipred.jrk.y;
+		const double djz = jpred.jrk.z - ipred.jrk.z;
+
+		const double mj  = jpred.mass;
+
+		const double dr2  = eps2 + dx*dx + dy*dy + dz*dz;
+		const double drdv =  dx*dvx +  dy*dvy +  dz*dvz;
+		const double dvdv = dvx*dvx + dvy*dvy + dvz*dvz;
+		const double drda =  dx*dax +  dy*day +  dz*daz;
+		const double dvda = dvx*dax + dvy*day + dvz*daz;
+		const double drdj =  dx*djx +  dy*djy +  dz*djz;
+
+		const double rinv1 = rsqrt(dr2);
+		const double rinv2 = rinv1 * rinv1;
+		const double mrinv3 = mj * rinv1 * rinv2;
+
+		double alpha = drdv * rinv2;
+		double beta  = (dvdv + drda) * rinv2 + alpha * alpha;
+		double gamma = (3.0*dvda + drdj)*rinv2 + alpha*(3.0*beta - 4.0*alpha*alpha);
+
+		acc.x += mrinv3 * dx;
+		acc.y += mrinv3 * dy;
+		acc.z += mrinv3 * dz;
+
+		alpha *= -3.0;
+		const double  tx = dvx + alpha * dx;
+		const double  ty = dvy + alpha * dy;
+		const double  tz = dvz + alpha * dz;
+		jrk.x += mrinv3 * tx;
+		jrk.y += mrinv3 * ty;
+		jrk.z += mrinv3 * tz;
+
+		alpha *= 2.0;
+		beta *= -3.0;
+		const double ux = dax + alpha * tx + beta * dx;
+		const double uy = day + alpha * ty + beta * dy;
+		const double uz = daz + alpha * tz + beta * dz;
+		snp.x += mrinv3 * ux;
+		snp.y += mrinv3 * uy;
+		snp.z += mrinv3 * uz;
+
+		alpha *=1.5;
+		beta  *= 3.0;
+		gamma *= -3.0;
+		crk.x += mrinv3 * (djx + alpha * ux + beta * tx + gamma * dx);
+		crk.y += mrinv3 * (djy + alpha * uy + beta * ty + gamma * dy);
+		crk.z += mrinv3 * (djz + alpha * uz + beta * tz + gamma * dz);
+}
+
+#if 0  // first version
+__global__ void force_kernel(
+		const int                  is,
+		const int                  ie,
+		const int                  nj,
+		const Gravity::GPredictor *pred,
+		const double               eps2,
+		Gravity::GForce          (*fo)[NJBLOCK])
+{
+	const int xid = threadIdx.x + blockDim.x * blockIdx.x;
+	const int yid = blockIdx.y;
+
+	const int js = ((0 + yid) * nj) / NJBLOCK;
+	const int je = ((1 + yid) * nj) / NJBLOCK;
+
+	const int i = is + xid;
+	if(i < ie){
+		const Gravity::GPredictor ipred = pred[i];
+		double3 acc = make_double3(0.0, 0.0, 0.0);
+		double3 jrk = make_double3(0.0, 0.0, 0.0);
+		double3 snp = make_double3(0.0, 0.0, 0.0);
+		double3 crk = make_double3(0.0, 0.0, 0.0);
+
+#pragma unroll 4
+		for(int j=js; j<je; j++){
+			const Gravity::GPredictor &jpred = pred[j];
+			pp_interact(ipred, jpred, eps2, acc, jrk, snp, crk);
+			
+		}
+
+		fo[xid][yid].acc = acc;
+		fo[xid][yid].jrk = jrk;
+		fo[xid][yid].snp = snp;
+		fo[xid][yid].crk = crk;
+	}
+}
+#else // tuned with shared memory
+__global__ void force_kernel(
+		const int                  is,
+		const int                  ie,
+		const int                  nj,
+		const Gravity::GPredictor *pred,
+		const double               eps2,
+		Gravity::GForce          (*fo)[NJBLOCK])
+{
+	const int tid = threadIdx.x;
+	const int xid = threadIdx.x + blockDim.x * blockIdx.x;
+	const int yid = blockIdx.y;
+
+	const int js = ((0 + yid) * nj) / NJBLOCK;
+	const int je = ((1 + yid) * nj) / NJBLOCK;
+	const int je8 = js + 8*((je-js)/8);
+
+	const int i = is + xid;
+
+#if 1
+	__shared__ Gravity::GPredictor jpsh[8];
+#else
+	__shared__ double2 align_buf[52];
+	Gravity::GPredictor *jpsh = (Gravity::GPredictor *)(align_buf);
+#endif
+
+	const Gravity::GPredictor ipred = pred[i];
+	double3 acc = make_double3(0.0, 0.0, 0.0);
+	double3 jrk = make_double3(0.0, 0.0, 0.0);
+	double3 snp = make_double3(0.0, 0.0, 0.0);
+	double3 crk = make_double3(0.0, 0.0, 0.0);
+
+	for(int j=js; j<je8; j+=8){
+		const double *src = (const double *)(pred + j);
+		double       *dst = (double *      )(jpsh);
+		__syncthreads();
+#if 0
+		if(tid < 52){
+			dst[tid] = src[tid];
+			dst[tid + 52] = src[tid + 52];
+		}
+#else
+	// copy 102 double (=8 predictors)
+		dst[tid] = src[tid];
+		if(tid < 40) dst[64+tid] = src[64+tid];
+#endif
+		__syncthreads();
+#pragma unroll
+		for(int jj=0; jj<8; jj++){
+			const Gravity::GPredictor &jpred = jpsh[jj];
+			pp_interact(ipred, jpred, eps2, acc, jrk, snp, crk);
+		}
+	}
+	const double *src = (const double *)(pred + je8);
+	double       *dst = (double *      )(jpsh);
+	__syncthreads();
+#if 0
+	if(tid < 0*52){
+		dst[tid] = src[tid];
+		dst[tid + 52] = src[tid + 52];
+	}
+#else
+	
+	// copy 102 double (=8 predictors)
+	dst[tid] = src[tid];
+	if(tid < 40) dst[64+tid] = src[64+tid];
+#endif
+	__syncthreads();
+	for(int j=je8; j<je; j++){
+		const Gravity::GPredictor &jpred = jpsh[j - je8];
+		pp_interact(ipred, jpred, eps2, acc, jrk, snp, crk);
+	}
+
+	if(i < ie){
+		fo[xid][yid].acc = acc;
+		fo[xid][yid].jrk = jrk;
+		fo[xid][yid].snp = snp;
+		fo[xid][yid].crk = crk;
+	}
+}
+#endif
+
+__device__ double shfl_xor(const double x, const int bit){
+	const int hi = __shfl_xor(__double2hiint(x), bit);
+	const int lo = __shfl_xor(__double2loint(x), bit);
+	return __hiloint2double(hi, lo);
+}
+
+__device__ double warp_reduce_double(double x){
+	x += shfl_xor(x, 16);
+	x += shfl_xor(x,  8);
+	x += shfl_xor(x,  4);
+	x += shfl_xor(x,  2);
+	x += shfl_xor(x,  1);
+	return x;
+}
+
+__global__ void reduce_kernel(
+		const Gravity::GForce (*fpart)[NJBLOCK],
+		Gravity::GForce        *ftot)
+{
+	const int bid = blockIdx.x;  // for particle
+	const int xid = threadIdx.x; // for 56 partial force
+	const int yid = threadIdx.y; // for 12 elements of Force
+
+	const Gravity::GForce &fsrc = fpart[bid][xid];
+	const double          *dsrc = (const double *)(&fsrc);
+	
+	const double x = xid<NJBLOCK ? dsrc[yid] : 0.0;
+	const double y = warp_reduce_double(x);
+
+	Gravity::GForce &fdst = ftot[bid];
+	double          *ddst = (double *)(&fdst);
+	if(32 == Gravity::NJREDUCE){
+		if(0==xid) ddst[yid] = y;
+	}
+	if(64 == Gravity::NJREDUCE){
+		// neeeds inter-warp reduction
+		__shared__ double fsh[12][2];
+		fsh[yid][xid/32] = y;
+		__syncthreads();
+		if(0==xid) ddst[yid] = fsh[yid][0] + fsh[yid][1];
+	}
+}
+
+void Gravity::calc_force_in_range(
+	   	const int    is,
+		const int    ie,
+		const double eps2,
+		Force        force[] )
+{
+	assert(104 == sizeof(GPredictor));
+	const int ni = ie - is;
+	{
+		const int niblock = (ni/NTHREAD) + 
+						   ((ni%NTHREAD) ? 1 : 0);
+		dim3 grid(niblock, NJBLOCK, 1);
+		force_kernel <<<grid, NTHREAD>>>
+			(is, ie, nbody, pred, eps2, fpart);
+	}
+
+	{
+		// const int nwarp = 32;
+		const int nword = sizeof(GForce) / sizeof(double);
+		assert(12 == nword);
+		reduce_kernel <<<ni, dim3(NJREDUCE, nword, 1)>>>
+			(fpart, ftot);
+	}
+
+	ftot.dtoh(ni);
+	for(int i=0; i<ni; i++){
+		force[is+i].acc.x = ftot[i].acc.x;
+		force[is+i].acc.y = ftot[i].acc.y;
+		force[is+i].acc.z = ftot[i].acc.z;
+		force[is+i].jrk.x = ftot[i].jrk.x;
+		force[is+i].jrk.y = ftot[i].jrk.y;
+		force[is+i].jrk.z = ftot[i].jrk.z;
+		force[is+i].snp.x = ftot[i].snp.x;
+		force[is+i].snp.y = ftot[i].snp.y;
+		force[is+i].snp.z = ftot[i].snp.z;
+		force[is+i].crk.x = ftot[i].crk.x;
+		force[is+i].crk.y = ftot[i].crk.y;
+		force[is+i].crk.z = ftot[i].crk.z;
+	}
+}
+
+#include "pot-titan.hu"
 

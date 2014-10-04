@@ -28,7 +28,7 @@ gpu-6th: compile.cpp nbodysystem.h hermite6.h hermite6-titan.h parameter.o hermi
 	cp $@ ../RUN
 
 gpu-8th: compile.cpp nbodysystem.h hermite8.h hermite8-titan.h parameter.o hermite8-titan.o TOUCH
-	$(CXX) $(CXXFLAGS) -DSIXTH -DCUDA_TITAN $< parameter.o hermite8-titan.o $(LIBCUDA) -o $@
+	$(CXX) $(CXXFLAGS) -DEIGHTH -DCUDA_TITAN $< parameter.o hermite8-titan.o $(LIBCUDA) -o $@
 	cp $@ ../RUN
 
 hermite4-titan.o: hermite4-titan.cu hermite4-titan.h hermite4.h

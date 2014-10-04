@@ -132,7 +132,6 @@ __global__ void predict_kernel(
 }
 #endif
 
-
 void Gravity::predict_all(const double tsys){
 	ptcl.htod(njpsend);
 	// printf("sent %d stars\n", njpsend);
@@ -322,8 +321,8 @@ __global__ void reduce_kernel(
 		Gravity::GForce        *ftot)
 {
 	const int bid = blockIdx.x;  // for particle
-	const int xid = threadIdx.x; // for 30 partial force
-	const int yid = threadIdx.y; // for 6 elements of Force
+	const int xid = threadIdx.x; // for 56 partial force
+	const int yid = threadIdx.y; // for  9 elements of Force
 
 	const Gravity::GForce &fsrc = fpart[bid][xid];
 	const double          *dsrc = (const double *)(&fsrc);
