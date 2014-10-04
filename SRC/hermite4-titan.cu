@@ -47,7 +47,7 @@ __device__ __forceinline__ void predict_one(
 		pr.vel  = vel;
 }
 
-#if 1 // This AoS access turned out to be fast enough
+#if 0 // naive version
 __global__ void predict_kernel(
 		const int                 nbody,
 		const Gravity::GParticle *ptcl,
@@ -62,8 +62,7 @@ __global__ void predict_kernel(
 
 	}
 }
-#else
-// specialized for 32 threads
+#else // specialized for 32 threads
 __global__ void predict_kernel(
 		const int                 nbody,
 		const Gravity::GParticle *ptcl,
@@ -108,7 +107,7 @@ void Gravity::predict_all(const double tsys){
 	ptcl.htod(njpsend);
 	// printf("sent %d stars\n", njpsend);
 
-	const int ntpred = 256;
+	const int ntpred = 32;
 	
 	const int nblock = (nbody/ntpred) + 
 	                  ((nbody%ntpred) ? 1 : 0);
@@ -117,6 +116,7 @@ void Gravity::predict_all(const double tsys){
 
 	// pred.dtoh(); // THIS DEBUGGING LINE WAS THE BOTTLENECK
 	// puts("pred all done");
+	cudaThreadSynchronize(); // for profiling
 }
 
 enum{

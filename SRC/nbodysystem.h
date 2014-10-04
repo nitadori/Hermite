@@ -539,7 +539,7 @@ breakpoint:
 		const double t1 = prof.tprev;
 		{
 			const double Gflops = (((1.0e-9 * nbody) * nbody) * Particle::flops) / (t1-t0);
-			printf("Init N square : %f Gflops\n", Gflops);
+			printf("## Init N square : %f Gflops\n", Gflops);
 		}
 		for(int i=0; i<n; i++){
 			ptcl[i].assign_force(force[i]);

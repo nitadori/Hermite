@@ -86,6 +86,7 @@ __device__ __forceinline__ void predict_one(
 		pr.acc  = acc;
 }
 
+#if 0 // naive version
 __global__ void predict_kernel(
 		const int                 nbody,
 		const Gravity::GParticle *ptcl,
@@ -100,12 +101,49 @@ __global__ void predict_kernel(
 
 	}
 }
+#else // specialized for 32 threads
+__global__ void predict_kernel(
+		const int                 nbody,
+		const Gravity::GParticle *ptcl,
+		Gravity::GPredictor      *pred,
+		const double              tsys)
+{
+	const int tid = threadIdx.x;
+	const int off = blockDim.x * blockIdx.x;
+
+	__shared__ Gravity::GParticle pshare[32];
+	Gravity::GPredictor *prbuf = (Gravity::GPredictor *)pshare;
+
+	{
+		const double2 *src = (const double2 *)(ptcl+off);
+		double2 *dst = (double2 *)(pshare);
+		// copy 320 DP words
+#pragma unrll
+		for(int i=0; i<10; i++){
+			dst[32*i + tid] = src[32*i + tid];
+		}
+	}
+	Gravity::GPredictor pr;
+	predict_one(tsys, pshare[tid], pr);
+	prbuf[tid] = pr;
+	{
+		const double *src = (const double *)(prbuf);
+		double *dst = (double *)(pred + off);
+		// copy 160 DP words
+#pragma unrll
+		for(int i=0; i<10; i++){
+			dst[32*i + tid] = src[32*i + tid];
+		}
+	}
+}
+#endif
+
 
 void Gravity::predict_all(const double tsys){
 	ptcl.htod(njpsend);
 	// printf("sent %d stars\n", njpsend);
 
-	const int ntpred = 256;
+	const int ntpred = 32;
 	
 	const int nblock = (nbody/ntpred) + 
 	                  ((nbody%ntpred) ? 1 : 0);
@@ -114,8 +152,8 @@ void Gravity::predict_all(const double tsys){
 
 	// pred.dtoh(); // THIS DEBUGGING LINE WAS THE BOTTLENECK
 	// puts("pred all done");
+	cudaThreadSynchronize(); // for profiling
 }
-
 enum{
 	NJBLOCK = Gravity::NJBLOCK,
 };

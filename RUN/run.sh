@@ -1,6 +1,6 @@
-exe=gpu-4th
+exe=gpu-6th
 for snap in pl1k pl2k pl4k pl8k pl16k pl32k pl64k
 do
     cp ${snap}.dat inp.dat
-    ./${exe} < inp.4th | grep '##' >> ${exe}.log
+    ./${exe} < inp.6th | grep '##' >> ${exe}.log
 done
