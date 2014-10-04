@@ -1,0 +1,35 @@
+## Init N square : 262.095309 Gflops
+## nbody  wtime(sec)  Gflops  wtime/block(usec)  nact
+## 1024 1.438326e-01 9.737477e+01 1.385670e+02 9.150482e+01
+## nbody  wtime(sec)  Gflops  wtime/block(usec)  nact
+## 1024 1.526991e-01 9.712741e+01 1.327819e+02 8.746174e+01
+## Init N square : 446.401746 Gflops
+## nbody  wtime(sec)  Gflops  wtime/block(usec)  nact
+## 2048 3.266952e-01 2.057436e+02 1.874327e+02 1.307613e+02
+## nbody  wtime(sec)  Gflops  wtime/block(usec)  nact
+## 2048 3.209403e-01 2.090497e+02 1.834993e+02 1.300743e+02
+## Init N square : 619.375754 Gflops
+## nbody  wtime(sec)  Gflops  wtime/block(usec)  nact
+## 4096 9.365278e-01 3.600515e+02 3.130106e+02 1.910739e+02
+## nbody  wtime(sec)  Gflops  wtime/block(usec)  nact
+## 4096 9.226517e-01 3.701824e+02 3.213694e+02 2.016963e+02
+## Init N square : 764.264294 Gflops
+## nbody  wtime(sec)  Gflops  wtime/block(usec)  nact
+## 8192 2.953618e+00 5.387283e+02 6.664301e+02 3.043491e+02
+## nbody  wtime(sec)  Gflops  wtime/block(usec)  nact
+## 8192 2.956955e+00 5.403812e+02 6.679365e+02 3.059729e+02
+## Init N square : 867.800672 Gflops
+## nbody  wtime(sec)  Gflops  wtime/block(usec)  nact
+## 16384 1.127907e+01 6.844354e+02 1.567845e+03 4.548342e+02
+## nbody  wtime(sec)  Gflops  wtime/block(usec)  nact
+## 16384 1.117537e+01 6.884910e+02 1.605656e+03 4.685635e+02
+## Init N square : 943.158095 Gflops
+## nbody  wtime(sec)  Gflops  wtime/block(usec)  nact
+## 32768 4.802080e+01 7.866272e+02 4.191028e+03 6.986780e+02
+## nbody  wtime(sec)  Gflops  wtime/block(usec)  nact
+## 32768 4.855633e+01 7.755869e+02 4.377599e+03 7.195386e+02
+## Init N square : 915.443593 Gflops
+## nbody  wtime(sec)  Gflops  wtime/block(usec)  nact
+## 65536 2.200974e+02 8.290694e+02 1.233661e+04 1.083788e+03
+## nbody  wtime(sec)  Gflops  wtime/block(usec)  nact
+## 65536 2.194131e+02 8.289450e+02 1.248509e+04 1.096668e+03
