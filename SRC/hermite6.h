@@ -215,6 +215,8 @@ __attribute__((aligned(32)));
 #include "hermite6-k.h"
 #elif defined MIC_GRAVITY
 #include "hermite6-mic.h"
+#elif defined CUDA_TITAN
+#include "hermite6-titan.h"
 #else
 struct Gravity{
 	typedef Particle GParticle;
