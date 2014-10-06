@@ -8,13 +8,16 @@ NVCC = /usr/local/cuda/bin/nvcc
 NVFLAGS = -O -arch=sm_35 -Xptxas -v
 LIBCUDA = -L /usr/local/cuda/lib64 -lcudart
 
-all : gpu-4th gpu-6th gpu-8th
+all: gpu-4th gpu-6th gpu-8th
 
-ptx : hermite4-titan.ptx hermite6-titan.ptx hermite8-titan.ptx
+touch:
+	touch TOUCH
 
-cubin : hermite4-titan.cubin hermite6-titan.cubin hermite8-titan.cubin
+ptx: hermite4-titan.ptx hermite6-titan.ptx hermite8-titan.ptx
 
-sass : hermite4-titan.sass hermite6-titan.sass hermite8-titan.sass
+cubin: hermite4-titan.cubin hermite6-titan.cubin hermite8-titan.cubin
+
+sass: hermite4-titan.sass hermite6-titan.sass hermite8-titan.sass
 
 parameter.o: parameter.cpp parameter.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
@@ -31,13 +34,13 @@ gpu-8th: compile.cpp nbodysystem.h hermite8.h hermite8-titan.h parameter.o hermi
 	$(CXX) $(CXXFLAGS) -DEIGHTH -DCUDA_TITAN $< parameter.o hermite8-titan.o $(LIBCUDA) -o $@
 	cp $@ ../RUN
 
-hermite4-titan.o: hermite4-titan.cu hermite4-titan.h hermite4.h
+hermite4-titan.o: hermite4-titan.cu hermite4-titan.h hermite4.h TOUCH
 	$(NVCC) $(NVFLAGS) -c $<
 
-hermite6-titan.o: hermite6-titan.cu hermite6-titan.h hermite6.h
+hermite6-titan.o: hermite6-titan.cu hermite6-titan.h hermite6.h TOUCH
 	$(NVCC) $(NVFLAGS) -c $<
 
-hermite8-titan.o: hermite8-titan.cu hermite6-titan.h hermite6.h
+hermite8-titan.o: hermite8-titan.cu hermite6-titan.h hermite6.h TOUCH
 	$(NVCC) $(NVFLAGS) -c $<
 
 hermite4-titan.ptx: hermite4-titan.cu hermite4-titan.h hermite4.h

@@ -1,0 +1,32 @@
+__device__ double shfl_xor(const double x, const int bit){
+	const int hi = __shfl_xor(__double2hiint(x), bit);
+	const int lo = __shfl_xor(__double2loint(x), bit);
+	return __hiloint2double(hi, lo);
+}
+
+__device__ double warp_reduce_double(double x){
+	x += shfl_xor(x, 16);
+	x += shfl_xor(x,  8);
+	x += shfl_xor(x,  4);
+	x += shfl_xor(x,  2);
+	x += shfl_xor(x,  1);
+	return x;
+}
+
+template <typename Tp, int NWORD, int NTHRE>
+__device__ void static_memcpy(void *vdst, const void *vsrc)
+{
+	Tp *dst = (Tp *)vdst;
+	const Tp *src = (const Tp *)vsrc;
+	const int tid = threadIdx.x;
+	const int niter = NWORD / NTHRE;
+#pragma unroll
+	for(int i=0; i<niter; i++){
+		dst[tid + i*NTHRE] = src[tid + i*NTHRE];
+	}
+	if(NWORD % NTHRE){
+		if(tid + niter*NTHRE < NWORD){
+			dst[tid + niter*NTHRE] = src[tid + niter*NTHRE];
+		}
+	}
+}

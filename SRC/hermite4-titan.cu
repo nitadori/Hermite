@@ -3,6 +3,7 @@
 #define CUDA_TITAN
 #include "hermite4.h"
 // #include "hermite4-titan.h"
+#include "cuda-common.hu"
 
 __device__ __forceinline__ void predict_one(
 		const double             tsys,
@@ -75,31 +76,13 @@ __global__ void predict_kernel(
 	__shared__ Gravity::GParticle pshare[32];
 	Gravity::GPredictor *prbuf = (Gravity::GPredictor *)pshare;
 
-	{
-		const double2 *src = (const double2 *)(ptcl+off);
-		double2 *dst = (double2 *)(pshare);
-		dst[  0 + tid] = src[  0 + tid];
-		dst[ 32 + tid] = src[ 32 + tid];
-		dst[ 64 + tid] = src[ 64 + tid];
-		dst[ 96 + tid] = src[ 96 + tid];
-		dst[128 + tid] = src[128 + tid];
-		dst[160 + tid] = src[160 + tid];
-		dst[192 + tid] = src[192 + tid];
-	}
+	static_memcpy<double2, 32*7, 32> (pshare, ptcl+off);
+
 	Gravity::GPredictor pr;
 	predict_one(tsys, pshare[tid], pr);
 	prbuf[tid] = pr;
-	{
-		const double *src = (const double *)(prbuf);
-		double *dst = (double *)(pred + off);
-		dst[  0 + tid] = src[  0 + tid];
-		dst[ 32 + tid] = src[ 32 + tid];
-		dst[ 64 + tid] = src[ 64 + tid];
-		dst[ 96 + tid] = src[ 96 + tid];
-		dst[128 + tid] = src[128 + tid];
-		dst[160 + tid] = src[160 + tid];
-		dst[192 + tid] = src[192 + tid];
-	}
+
+	static_memcpy<double, 32*7, 32> (pred+off, prbuf);
 }
 #endif
 
@@ -197,7 +180,7 @@ __global__ void force_kernel(
 		const double               eps2,
 		Gravity::GForce          (*fo)[NJBLOCK])
 {
-	const int tid = threadIdx.x;
+	// const int tid = threadIdx.x;
 	const int xid = threadIdx.x + blockDim.x * blockIdx.x;
 	const int yid = blockIdx.y;
 
@@ -214,12 +197,9 @@ __global__ void force_kernel(
 	double3 jrk = make_double3(0.0, 0.0, 0.0);
 
 	for(int j=js; j<je8; j+=8){
-		const double *src = (const double *)(pred + j);
-		double       *dst = (double *      )(jpsh);
 		__syncthreads();
-		if(tid < 56 /*sizeof(jpsh)/sizeof(double)*/){
-			dst[tid] = src[tid];
-		}
+		static_memcpy<double, 56, Gravity::NTHREAD> (jpsh, pred + j);
+		// 56 = sizeof(jpsh)/sizeof(double)
 		__syncthreads();
 #pragma unroll
 		for(int jj=0; jj<8; jj++){
@@ -228,12 +208,8 @@ __global__ void force_kernel(
 			pp_interact(ipred, jpred, eps2, acc, jrk);
 		}
 	}
-	const double *src = (const double *)(pred + je8);
-	double       *dst = (double *      )(jpsh);
 	__syncthreads();
-	if(tid < 56 /*sizeof(jpsh)/sizeof(double)*/){
-		dst[tid] = src[tid];
-	}
+	static_memcpy<double, 56, Gravity::NTHREAD> (jpsh, pred + je8);
 	__syncthreads();
 	for(int j=je8; j<je; j++){
 		// const Gravity::GPredictor &jpred = pred[j];
@@ -247,21 +223,6 @@ __global__ void force_kernel(
 	}
 }
 #endif
-
-__device__ double shfl_xor(const double x, const int bit){
-	const int hi = __shfl_xor(__double2hiint(x), bit);
-	const int lo = __shfl_xor(__double2loint(x), bit);
-	return __hiloint2double(hi, lo);
-}
-
-__device__ double warp_reduce_double(double x){
-	x += shfl_xor(x, 16);
-	x += shfl_xor(x,  8);
-	x += shfl_xor(x,  4);
-	x += shfl_xor(x,  2);
-	x += shfl_xor(x,  1);
-	return x;
-}
 
 __global__ void reduce_kernel(
 		const Gravity::GForce (*fpart)[NJBLOCK],

@@ -33,10 +33,14 @@ void Gravity::calc_potential(
 		const double eps2,
 		double       potbuf[] )
 {
-	cudaPointer<double4> posm;
-	cudaPointer<double > pot;
-	posm.allocate(nbody);
-	pot .allocate(nbody);
+	static cudaPointer<double4> posm;
+	static cudaPointer<double > pot;
+	static bool initcall = true;
+	if(initcall){
+		posm.allocate(nbody);
+		pot .allocate(nbody);
+		initcall = false;
+	}
 
 	const int nbody = this->nbody;
 	for(int i=0; i<nbody; i++){
@@ -57,7 +61,7 @@ void Gravity::calc_potential(
 		potbuf[i] = pot[i];
 	}
 
-	posm.free();
-	pot .free();
+	// posm.free();
+	// pot .free();
 	// puts("calc pot done");
 }

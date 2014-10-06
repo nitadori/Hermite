@@ -3,6 +3,7 @@
 #define CUDA_TITAN
 #include "hermite8.h"
 // #include "hermite8-titan.h"
+#include "cuda-common.hu"
 
 __device__ __forceinline__ void predict_one(
 		const double             tsys,
@@ -380,21 +381,6 @@ __global__ void force_kernel(
 	}
 }
 #endif
-
-__device__ double shfl_xor(const double x, const int bit){
-	const int hi = __shfl_xor(__double2hiint(x), bit);
-	const int lo = __shfl_xor(__double2loint(x), bit);
-	return __hiloint2double(hi, lo);
-}
-
-__device__ double warp_reduce_double(double x){
-	x += shfl_xor(x, 16);
-	x += shfl_xor(x,  8);
-	x += shfl_xor(x,  4);
-	x += shfl_xor(x,  2);
-	x += shfl_xor(x,  1);
-	return x;
-}
 
 __global__ void reduce_kernel(
 		const Gravity::GForce (*fpart)[NJBLOCK],
