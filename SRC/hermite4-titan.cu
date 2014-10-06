@@ -64,6 +64,7 @@ __global__ void predict_kernel(
 	}
 }
 #else // specialized for 32 threads
+// 14N DP -> 7N DP
 __global__ void predict_kernel(
 		const int                 nbody,
 		const Gravity::GParticle *ptcl,

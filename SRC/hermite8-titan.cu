@@ -137,6 +137,7 @@ __global__ void predict_kernel(
 	}
 }
 #else // specialized for 32 threads
+// 26N DP -> 13N DP
 __global__ void predict_kernel(
 		const int                 nbody,
 		const Gravity::GParticle *ptcl,
@@ -149,27 +150,13 @@ __global__ void predict_kernel(
 	__shared__ Gravity::GParticle pshare[32];
 	Gravity::GPredictor *prbuf = (Gravity::GPredictor *)pshare;
 
-	{
-		const double2 *src = (const double2 *)(ptcl+off);
-		double2 *dst = (double2 *)(pshare);
-		// copy 832 DP words
-#pragma unrll
-		for(int i=0; i<13; i++){
-			dst[32*i + tid] = src[32*i + tid];
-		}
-	}
+	static_memcpy<double2, 32*13, 32> (pshare, ptcl+off);
+
 	Gravity::GPredictor pr;
 	predict_one(tsys, pshare[tid], pr);
 	prbuf[tid] = pr;
-	{
-		const double *src = (const double *)(prbuf);
-		double *dst = (double *)(pred + off);
-		// copy 416 DP words
-#pragma unrll
-		for(int i=0; i<13; i++){
-			dst[32*i + tid] = src[32*i + tid];
-		}
-	}
+
+	static_memcpy<double, 32*13, 32> (pred+off, prbuf);
 }
 #endif
 
@@ -309,7 +296,7 @@ __global__ void force_kernel(
 		const double               eps2,
 		Gravity::GForce          (*fo)[NJBLOCK])
 {
-	const int tid = threadIdx.x;
+	// const int tid = threadIdx.x;
 	const int xid = threadIdx.x + blockDim.x * blockIdx.x;
 	const int yid = blockIdx.y;
 
@@ -333,41 +320,23 @@ __global__ void force_kernel(
 	double3 crk = make_double3(0.0, 0.0, 0.0);
 
 	for(int j=js; j<je8; j+=8){
-		const double *src = (const double *)(pred + j);
-		double       *dst = (double *      )(jpsh);
 		__syncthreads();
-#if 0
-		if(tid < 52){
-			dst[tid] = src[tid];
-			dst[tid + 52] = src[tid + 52];
-		}
-#else
-	// copy 102 double (=8 predictors)
-		dst[tid] = src[tid];
-		if(tid < 40) dst[64+tid] = src[64+tid];
-#endif
+		// static_memcpy<double2, 52, Gravity::NTHREAD> (jpsh, pred + j); // this doesn't run
+		static_memcpy<double, 104, Gravity::NTHREAD> (jpsh, pred + j);
+		// 104 = sizeof(jpsh) / sizeof(double)
 		__syncthreads();
+
 #pragma unroll
 		for(int jj=0; jj<8; jj++){
 			const Gravity::GPredictor &jpred = jpsh[jj];
 			pp_interact(ipred, jpred, eps2, acc, jrk, snp, crk);
 		}
 	}
-	const double *src = (const double *)(pred + je8);
-	double       *dst = (double *      )(jpsh);
+
 	__syncthreads();
-#if 0
-	if(tid < 0*52){
-		dst[tid] = src[tid];
-		dst[tid + 52] = src[tid + 52];
-	}
-#else
-	
-	// copy 102 double (=8 predictors)
-	dst[tid] = src[tid];
-	if(tid < 40) dst[64+tid] = src[64+tid];
-#endif
+	static_memcpy<double, 104, Gravity::NTHREAD> (jpsh, pred + je8);
 	__syncthreads();
+
 	for(int j=je8; j<je; j++){
 		const Gravity::GPredictor &jpred = jpsh[j - je8];
 		pp_interact(ipred, jpred, eps2, acc, jrk, snp, crk);
