@@ -84,6 +84,12 @@ struct vector3{
 	INLINE const vector3<REAL> unit() const{
 		return *this / abs();
 	}
+#if 1 // for copying from CUDA float3/double3
+	template <typename rhs_t>
+	vector3 operator=(const rhs_t &rhs){
+		return ( (*this) = vector3(rhs.x, rhs.y, rhs.z) );
+	}
+#endif
 
 #ifdef USE_STD
 	friend std::ostream &operator << (std::ostream &ofs, const vector3<REAL> &v){
