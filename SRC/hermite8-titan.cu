@@ -417,10 +417,11 @@ void Gravity::calc_force_in_range(
 
 	ftot.dtoh(ni);
 	for(int i=0; i<ni; i++){
-		force[is+i].acc = ftot[i].acc;
-		force[is+i].jrk = ftot[i].jrk;
-		force[is+i].snp = ftot[i].snp;
-		force[is+i].crk = ftot[i].crk;
+		GForce f = ftot[i];
+		force[is+i].acc = f.acc;
+		force[is+i].jrk = f.jrk;
+		force[is+i].snp = f.snp;
+		force[is+i].crk = f.crk;
 	}
 }
 

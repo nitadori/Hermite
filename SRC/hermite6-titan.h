@@ -61,7 +61,7 @@ struct Gravity{
 		ftot .free();
 	}
 
-	void set_jp(const int addr, const Particle &p){
+	void set_jp(const int addr, const Particle p){
 		GParticle &pdst = ptcl[addr];
 		pdst.pos.x = p.pos.x;
 		pdst.pos.y = p.pos.y;

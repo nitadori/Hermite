@@ -61,14 +61,14 @@ struct Gravity{
 		return ::make_double3(v.x, v.y, v.z);
 	}
 
-	void set_jp(const int addr, const Particle &p){
+	void set_jp(const int addr, const Particle p){
 		GParticle &pdst = ptcl[addr];
-		pdst.pos = make_double3(p.pos);
+		pdst.pos   = make_double3(p.pos);
 		pdst.mass  = p.mass;
-		pdst.vel  = make_double3(p.vel);
+		pdst.vel   = make_double3(p.vel);
 		pdst.tlast = p.tlast;
-		pdst.acc  = make_double3(p.acc);
-		pdst.jrk  = make_double3(p.jrk);
+		pdst.acc   = make_double3(p.acc);
+		pdst.jrk   = make_double3(p.jrk);
 	}
 
 	void predict_all(const double tsys);
