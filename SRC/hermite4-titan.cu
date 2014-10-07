@@ -1,3 +1,15 @@
+#ifdef __SSE__
+#warning SSE is available
+typedef double v2df __attribute__((vector_size(16)));
+#endif
+#ifdef __AVX__
+#warning AVX is available
+typedef double v4df __attribute__((vector_size(32)));
+#endif
+#ifdef __AVX2__
+#warning AVX2 is available
+#endif
+
 #include <cstdio>
 #include "vector3.h"
 #define CUDA_TITAN

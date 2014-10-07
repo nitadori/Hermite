@@ -57,25 +57,18 @@ struct Gravity{
 		ftot .free();
 	}
 
+	static double3 make_double3(const dvec3 &v){
+		return ::make_double3(v.x, v.y, v.z);
+	}
+
 	void set_jp(const int addr, const Particle &p){
 		GParticle &pdst = ptcl[addr];
-		pdst.pos.x = p.pos.x;
-		pdst.pos.y = p.pos.y;
-		pdst.pos.z = p.pos.z;
+		pdst.pos = make_double3(p.pos);
 		pdst.mass  = p.mass;
-
-		pdst.vel.x = p.vel.x;
-		pdst.vel.y = p.vel.y;
-		pdst.vel.z = p.vel.z;
+		pdst.vel  = make_double3(p.vel);
 		pdst.tlast = p.tlast;
-
-		pdst.acc.x = p.acc.x;
-		pdst.acc.y = p.acc.y;
-		pdst.acc.z = p.acc.z;
-
-		pdst.jrk.x = p.jrk.x;
-		pdst.jrk.y = p.jrk.y;
-		pdst.jrk.z = p.jrk.z;
+		pdst.acc  = make_double3(p.acc);
+		pdst.jrk  = make_double3(p.jrk);
 	}
 
 	void predict_all(const double tsys);
