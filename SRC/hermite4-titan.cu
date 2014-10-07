@@ -297,4 +297,48 @@ void Gravity::calc_force_in_range(
 	}
 }
 
+// optimization for overlapping
+void Gravity::calc_force_on_first_nact(
+		const int    nact,
+		const double eps2,
+		Force        force[] )
+{
+	int istore  = 0;
+	int nistore = 0;
+	for(int ii=0; ii<nact; ii+=NIMAX){
+		const int ni = (nact-ii) < NIMAX ? (nact-ii) : NIMAX;
+		// calc_force_in_range(ii, ii+ni, eps2, force);
+		{   // partial force calcculation
+			const int is = ii;
+			const int ie = is + ni;
+			const int niblock = (ni/NTHREAD) + 
+				((ni%NTHREAD) ? 1 : 0);
+			dim3 grid(niblock, NJBLOCK, 1);
+			force_kernel <<<grid, NTHREAD>>>
+				(is, ie, nbody, pred, eps2, fpart);
+		}
+		for(int i=0; i<nistore; i++){
+			GForce f = ftot[i];
+			force[istore+i].acc = f.acc;
+			force[istore+i].jrk = f.jrk;
+		}
+		{   // reduction
+			const int nword = sizeof(GForce) / sizeof(double);
+			assert(6 == nword);
+			reduce_kernel <<<ni, dim3(NJREDUCE, nword, 1)>>>
+				(fpart, ftot);
+		}
+		ftot.dtoh(ni);
+		istore  = ii;
+		nistore = ni;
+	}
+	for(int i=0; i<nistore; i++){
+		GForce f = ftot[i];
+		force[istore+i].acc = f.acc;
+		force[istore+i].jrk = f.jrk;
+	}
+
+	this->njpsend = nact;
+}
+
 #include "pot-titan.hu"

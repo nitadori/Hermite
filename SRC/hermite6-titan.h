@@ -8,7 +8,7 @@ struct Gravity{
 		NJBLOCK  = 56, // for Titan
 		NJREDUCE = 64,
 		NTHREAD  = 64,
-		NIMAX    = 2048,
+		NIMAX    = 4096,
 	};
 
 	struct GParticle{
@@ -96,6 +96,7 @@ struct Gravity{
 			const int    nact,
 			const double eps2,
 			Force        force[] )
+#if 0
 	{
 		for(int ii=0; ii<nact; ii+=NIMAX){
 			const int ni = (nact-ii) < NIMAX ? (nact-ii) : NIMAX;
@@ -109,6 +110,9 @@ struct Gravity{
 		// puts("init force done");
 		// exit(0);
 	}
+#else
+	;
+#endif
 
 	void calc_potential(
 			const double eps2,

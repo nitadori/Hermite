@@ -1,3 +1,22 @@
+__device__ __forceinline__ void pp_interact_pot(
+		const double4 ip,
+		const double4 jp,
+		const double  eps2,
+		const bool    skip,
+		double       &sum)
+{
+		const double dx = jp.x - ip.x;
+		const double dy = jp.y - ip.y;
+		const double dz = jp.z - ip.z;
+		const double mj = jp.w;
+
+		const double r2 = eps2 + dx*dx + dy*dy + dz*dz;
+		double rinv = rsqrt(r2);
+		if(skip) rinv = 0.0;
+		sum -= mj * rinv;
+}
+
+#if 0
 __global__ void pot_kernel(
 		const int      nbody,
 		const double4 *posm,
@@ -6,28 +25,58 @@ __global__ void pot_kernel(
 {
 	const int tid = threadIdx.x + blockDim.x * blockIdx.x;
 	if(tid < nbody){
-		const double xi = posm[tid].x;
-		const double yi = posm[tid].y;
-		const double zi = posm[tid].z;
+		const double4 pi = posm[tid];
 
 		double sum = 0.0;
 
 #pragma unroll 4
 		for(int j=0; j<nbody; j++){
-			const double dx = posm[j].x - xi;
-			const double dy = posm[j].y - yi;
-			const double dz = posm[j].z - zi;
-			const double mj = posm[j].w;
-
-			const double r2 = eps2 + dx*dx + dy*dy + dz*dz;
-			double rinv = rsqrt(r2);
-			if(j == tid) rinv = 0.0;
-			sum -= mj * rinv;
+			const double4 pj = posm[j];
+			pp_interact_pot(pi, pj, eps2, (tid==j), sum);
 		}
-
 		pot[tid] = sum;
 	}
 }
+#else
+__global__ void pot_kernel(
+		const int      nbody,
+		const double4 *posm,
+		double        *pot,
+		const double   eps2)
+{
+	const int tid = threadIdx.x + blockDim.x * blockIdx.x;
+
+	__shared__ double4 jpsh[8];
+	const int je8 = 8*(nbody/8);
+
+	const double4 pi = posm[tid];
+	double sum = 0.0;
+
+	for(int j=0; j<je8; j+=8){
+		__syncthreads();
+		static_memcpy<double, 32, Gravity::NTHREAD> (jpsh, posm + j);
+		__syncthreads();
+#pragma unroll
+		for(int jj=0; jj<8; jj++){
+			const double4 &pj = jpsh[jj];
+			pp_interact_pot(pi, pj, eps2, (tid==j+jj), sum);
+		}
+	}
+	__syncthreads();
+	static_memcpy<double, 32, Gravity::NTHREAD> (jpsh, posm + je8);
+	__syncthreads();
+#pragma unroll 4
+
+	for(int j=je8; j<nbody; j++){
+		const double4 &pj = jpsh[j - je8];
+		pp_interact_pot(pi, pj, eps2, (tid==j), sum);
+	}
+
+	if(tid < nbody){
+		pot[tid] = sum;
+	}
+}
+#endif
 
 void Gravity::calc_potential(
 		const double eps2,
@@ -37,22 +86,27 @@ void Gravity::calc_potential(
 	static cudaPointer<double > pot;
 	static bool initcall = true;
 	if(initcall){
-		posm.allocate(nbody);
-		pot .allocate(nbody);
+		posm.allocate(nbody + NTHREAD);
+		pot .allocate(nbody + NTHREAD);
 		initcall = false;
 	}
 
 	const int nbody = this->nbody;
 	for(int i=0; i<nbody; i++){
+#if 0
 		posm[i].x = ptcl[i].pos.x;
 		posm[i].y = ptcl[i].pos.y;
 		posm[i].z = ptcl[i].pos.z;
 		posm[i].w = ptcl[i].mass;
+#else
+		posm[i] = make_double4(
+				ptcl[i].pos.x, ptcl[i].pos.y, ptcl[i].pos.z, ptcl[i].mass);
+#endif
 	}
 	posm.htod();
 
 	const int nblock = (nbody/NTHREAD) + 
-		((nbody%NTHREAD) ? 1 : 0);
+	                  ((nbody%NTHREAD) ? 1 : 0);
 	pot_kernel <<<nblock, NTHREAD>>>
 		(nbody, posm, pot, eps2);
 
