@@ -69,3 +69,12 @@ __device__ void reduce_final(const double x, double *dst){
 	}
 }
 
+__device__ __forceinline__
+double rsqrt_x3(const double x){
+	const double y  = double(float(rsqrtf(x)));
+	const double y2 = y*y;
+	const double h  = 1.0 - x*y2;
+	const double p  = 3./8. * h * (7./3. - x*y2);
+	return y + p*y;
+}
+

@@ -11,7 +11,8 @@ __device__ __forceinline__ void pp_interact_pot(
 		const double mj = jp.w;
 
 		const double r2 = eps2 + dx*dx + dy*dy + dz*dz;
-		double rinv = rsqrt(r2);
+		// double rinv = rsqrt(r2);
+		double rinv = rsqrt_x3(r2);
 		if(skip) rinv = 0.0;
 		sum -= mj * rinv;
 }

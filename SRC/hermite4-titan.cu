@@ -137,7 +137,8 @@ __device__ __forceinline__ void pp_interact(
 		const double dr2  = eps2 + dx*dx + dy*dy + dz*dz;
 		const double drdv = dx*dvx + dy*dvy + dz*dvz;
 
-		const double rinv1 = rsqrt(dr2);
+		// const double rinv1 = rsqrt(dr2);
+		const double rinv1 = rsqrt_x3(dr2);
 		const double rinv2 = rinv1 * rinv1;
 		const double mrinv3 = mj * rinv1 * rinv2;
 

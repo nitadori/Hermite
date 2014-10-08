@@ -180,7 +180,8 @@ __device__ __forceinline__ void pp_interact(
 		const double dvdv = dvx*dvx + dvy*dvy + dvz*dvz;
 		const double drda =  dx*dax +  dy*day +  dz*daz;
 
-		const double rinv1 = rsqrt(dr2);
+		// const double rinv1 = rsqrt(dr2);
+		const double rinv1 = rsqrt_x3(dr2);
 		const double rinv2 = rinv1 * rinv1;
 		const double mrinv3 = mj * rinv1 * rinv2;
 
