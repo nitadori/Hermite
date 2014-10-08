@@ -37,7 +37,7 @@ __global__ void pot_kernel(
 		pot[tid] = sum;
 	}
 }
-#else
+#elif 0
 __global__ void pot_kernel(
 		const int      nbody,
 		const double4 *posm,
@@ -65,7 +65,6 @@ __global__ void pot_kernel(
 	__syncthreads();
 	static_memcpy<double, 32, Gravity::NTHREAD> (jpsh, posm + je8);
 	__syncthreads();
-#pragma unroll 4
 
 	for(int j=je8; j<nbody; j++){
 		const double4 &pj = jpsh[j - je8];
@@ -74,6 +73,56 @@ __global__ void pot_kernel(
 
 	if(tid < nbody){
 		pot[tid] = sum;
+	}
+}
+#else
+__global__ void pot_kernel(
+		const int      nbody,
+		const double4 *posm,
+		double        *pot,
+		const double   eps2)
+{
+	const int tid = threadIdx.x + blockDim.x * blockIdx.x;
+
+	__shared__ double4 jpsh[8];
+	const int je8 = 8*(nbody/8);
+
+	const double4 pi = posm[tid];
+	double4 sum = make_double4(0.0, 0.0, 0.0, 0.0);
+
+	for(int j=0; j<je8; j+=8){
+		__syncthreads();
+		static_memcpy<double, 32, Gravity::NTHREAD> (jpsh, posm + j);
+		__syncthreads();
+#pragma unroll
+		for(int jj=0; jj<8; jj++){
+			const double4 &pj = jpsh[jj];
+			pp_interact_pot(pi, pj, eps2, (tid==j+jj), sum.x);
+		}
+		if(0 == j%32){
+			sum.y += sum.x;
+			sum.x = 0.0;
+		}
+		if(0 == j%1024){
+			sum.z += sum.y;
+			sum.y = 0.0;
+		}
+		if(0 == j%32768){
+			sum.w += sum.z;
+			sum.z = 0.0;
+		}
+	}
+	__syncthreads();
+	static_memcpy<double, 32, Gravity::NTHREAD> (jpsh, posm + je8);
+	__syncthreads();
+
+	for(int j=je8; j<nbody; j++){
+		const double4 &pj = jpsh[j - je8];
+		pp_interact_pot(pi, pj, eps2, (tid==j), sum.x);
+	}
+
+	if(tid < nbody){
+		pot[tid] = ((sum.x + sum.y) + sum.z) + sum.w;
 	}
 }
 #endif
