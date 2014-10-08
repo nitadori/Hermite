@@ -298,6 +298,12 @@ __global__ void force_kernel(
 }
 #endif
 
+template<>
+__device__ void reduce_final<1, 9>(const double x, double *dst){
+	const int yid = threadIdx.y;
+	dst[yid] = x;
+}
+
 __global__ void reduce_kernel(
 		const Gravity::GForce (*fpart)[NJBLOCK],
 		Gravity::GForce        *ftot)
@@ -314,16 +320,8 @@ __global__ void reduce_kernel(
 
 	Gravity::GForce &fdst = ftot[bid];
 	double          *ddst = (double *)(&fdst);
-	if(32 == Gravity::NJREDUCE){
-		if(0==xid) ddst[yid] = y;
-	}
-	if(64 == Gravity::NJREDUCE){
-		// neeeds inter-warp reduction
-		__shared__ double fsh[9][2];
-		fsh[yid][xid/32] = y;
-		__syncthreads();
-		if(0==xid) ddst[yid] = fsh[yid][0] + fsh[yid][1];
-	}
+
+	reduce_final<Gravity::NJREDUCE/32, 9> (y, ddst);
 }
 
 void Gravity::calc_force_in_range(

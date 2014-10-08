@@ -237,12 +237,80 @@ __global__ void force_kernel(
 }
 #endif
 
+#if 0 // was slower
+enum{
+	NXTH = 32,
+	NYTH =  4,
+};
+
+__global__ void force_kernel_warp(
+		const int                  is,
+		const int                  ie,
+		const int                  nj,
+		const Gravity::GPredictor *pred,
+		const double               eps2,
+		Gravity::GForce          (*fo)[NJBLOCK])
+{
+	const int tid = threadIdx.x;
+	const int uid = threadIdx.y;
+	const int xid = threadIdx.x + blockDim.x * blockIdx.x;
+	const int yid = threadIdx.y + blockDim.y * blockIdx.y;
+
+	const int js = ((0 + yid) * nj) / (NJBLOCK*NYTH);
+	const int je = ((1 + yid) * nj) / (NJBLOCK*NYTH);
+	const int je8 = js + 8*((je-js)/8);
+
+	const int i = is + xid;
+
+	__shared__ Gravity::GPredictor jpsh[NYTH][8];
+
+	const Gravity::GPredictor ipred = pred[i];
+	double3 acc = make_double3(0.0, 0.0, 0.0);
+	double3 jrk = make_double3(0.0, 0.0, 0.0);
+
+	for(int j=js; j<je8; j+=8){
+		static_memcpy<double, 56, Gravity::NTHREAD> (jpsh[uid], pred + j);
+		// 56 = sizeof(jpsh)/sizeof(double)
+#pragma unroll
+		for(int jj=0; jj<8; jj++){
+			// const Gravity::GPredictor &jpred = pred[j+jj];
+			const Gravity::GPredictor &jpred = jpsh[uid][jj];
+			pp_interact(ipred, jpred, eps2, acc, jrk);
+		}
+	}
+	static_memcpy<double, 56, Gravity::NTHREAD> (jpsh[uid], pred + je8);
+	for(int j=je8; j<je; j++){
+		// const Gravity::GPredictor &jpred = pred[j];
+		const Gravity::GPredictor &jpred = jpsh[uid][j - je8];
+		pp_interact(ipred, jpred, eps2, acc, jrk);
+	}
+
+	acc.x = vreduce<NXTH, NYTH> (acc.x, jpsh);
+	acc.y = vreduce<NXTH, NYTH> (acc.y, jpsh);
+	acc.z = vreduce<NXTH, NYTH> (acc.z, jpsh);
+	jrk.x = vreduce<NXTH, NYTH> (jrk.x, jpsh);
+	jrk.y = vreduce<NXTH, NYTH> (jrk.y, jpsh);
+	jrk.z = vreduce<NXTH, NYTH> (jrk.z, jpsh);
+
+	if(i < ie && 0==uid){
+		fo[xid][yid].acc = acc;
+		fo[xid][yid].jrk = jrk;
+	}
+}
+#endif
+
+template<>
+__device__ void reduce_final<1, 6>(const double x, double *dst){
+	const int yid = threadIdx.y;
+	dst[yid] = x;
+}
+
 __global__ void reduce_kernel(
 		const Gravity::GForce (*fpart)[NJBLOCK],
 		Gravity::GForce        *ftot)
 {
 	const int bid = blockIdx.x;  // for particle
-	const int xid = threadIdx.x; // for 30 partial force
+	const int xid = threadIdx.x; // for 56 partial force
 	const int yid = threadIdx.y; // for 6 elements of Force
 
 	const Gravity::GForce &fsrc = fpart[bid][xid];
@@ -253,16 +321,8 @@ __global__ void reduce_kernel(
 
 	Gravity::GForce &fdst = ftot[bid];
 	double          *ddst = (double *)(&fdst);
-	if(32 == Gravity::NJREDUCE){
-		if(0==xid) ddst[yid] = y;
-	}
-	if(64 == Gravity::NJREDUCE){
-		// neeeds inter-warp reduction
-		__shared__ double fsh[6][2];
-		fsh[yid][xid/32] = y;
-		__syncthreads();
-		if(0==xid) ddst[yid] = fsh[yid][0] + fsh[yid][1];
-	}
+
+	reduce_final<Gravity::NJREDUCE/32, 6> (y, ddst);
 }
 
 void Gravity::calc_force_in_range(
@@ -311,11 +371,20 @@ void Gravity::calc_force_on_first_nact(
 		{   // partial force calcculation
 			const int is = ii;
 			const int ie = is + ni;
+#if 1
 			const int niblock = (ni/NTHREAD) + 
 				((ni%NTHREAD) ? 1 : 0);
 			dim3 grid(niblock, NJBLOCK, 1);
 			force_kernel <<<grid, NTHREAD>>>
 				(is, ie, nbody, pred, eps2, fpart);
+#else
+			const int niblock = (ni/32) + 
+			                   ((ni%32) ? 1 : 0);
+			dim3 grid(niblock, NJBLOCK, 1);
+			dim3 thread(NXTH, NYTH, 1);
+			force_kernel_warp <<<grid, thread>>>
+				(is, ie, nbody, pred, eps2, fpart);
+#endif
 		}
 		for(int i=0; i<nistore; i++){
 			GForce f = ftot[i];

@@ -30,3 +30,42 @@ __device__ void static_memcpy(void *vdst, const void *vsrc)
 		}
 	}
 }
+
+template <int nx, int ny>
+__device__ double vreduce(double x, void *vshm){
+	const int xid = threadIdx.x;
+	const int yid = threadIdx.y;
+	double (*shm)[nx] = (double (*)[nx])(vshm); // shm[ny-1][nx];
+
+	__syncthreads();
+	if(0 != yid) shm[yid-1][xid] = x;
+	__syncthreads();
+
+	if(0 == yid){
+#pragma unroll
+		for(int j=0; j<ny-1; j++){
+			x += shm[j][xid];
+		}
+	}
+
+	return x;
+}
+
+template<int NWARP, int NWORD>
+__device__ void reduce_final(const double x, double *dst){
+	__shared__ double fsh[NWORD][NWARP-1];
+	const int xid = threadIdx.x;
+	const int yid = threadIdx.y;
+
+	if((xid > 0) && (xid%32 == 0)) fsh[yid][xid/32 - 1] = x;
+	__syncthreads();
+
+	if(xid == 0){
+		double z = x;
+		for(int j=0; j<NWARP-1; j++){
+			z += fsh[yid][j];
+		}
+		dst[yid] = z;
+	}
+}
+
