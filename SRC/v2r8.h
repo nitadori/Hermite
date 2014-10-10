@@ -76,6 +76,17 @@ struct v2r8{
 		y += y * ( (v2r8(0.5) - (y*y)*x50) * (v2r8(1.75) - (y*y)*x75) ); // 2-mul, 3-fma
 		return y; // 6-mul, 6-fma
 	}
+	v2r8 rsqrta_x7() const{
+		const v2r8 x(val);
+		const v2r8 y0 = v2r8(__builtin_fj_rsqrta_v2r8(x.val));
+		const v2r8 h  = v2r8(1.0) - x*(y0*y0);
+		const v2r8 h2 = h*h;
+		const v2r8 a  = v2r8(1./2.)    + h * v2r8(3./8.);
+		const v2r8 b  = v2r8(5./16.)   + h * v2r8(35./128.);
+		const v2r8 c  = v2r8(63./256.) + h * v2r8(231./1024.);
+		const v2r8 p  = h*(a + h2*(b + h2*c));
+		return y0 + p*y0; // 3-mul, 7-fma
+	}
 
 	void storel(double *p) const {
 		__builtin_fj_storel_v2r8(p, val);

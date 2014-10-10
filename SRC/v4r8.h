@@ -75,6 +75,11 @@ struct v4r8{
 				v2r8(v0).rsqrta_x8(),
 				v2r8(v1).rsqrta_x8());
 	}
+	v4r8 rsqrta_x7() const {
+		return v4r8(
+				v2r8(v0).rsqrta_x7(),
+				v2r8(v1).rsqrta_x7());
+	}
 
 	v2r8 first() const {
 		return v2r8(v0);

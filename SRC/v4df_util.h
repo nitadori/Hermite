@@ -56,8 +56,17 @@ static inline v4df v4df_rsqrt(const v4df x){
 	const v4df c4 = REP4(35./128.);
 
 	const v4df h  = c0 - x*y0*y0;
+#if 1
 	const v4df y1 = y0 * (c0 + h * (c1 + h * (c2 + h * (c3 + h * (c4)))));
 	// const v4df y1 = y0 * (c0 + h * (c1 + h * (c2 + h * (c3))));
+#else
+	// latency orient
+	const v4df h2 = h*h;
+	const v4df a  = c1 + h * c2;
+	const v4df b  = c3 + h * c4;
+	const v4df p  = h*(a + h2*b);
+	const v4df y1 = y0 + p*y0;
+#endif
 	return y1;
 #endif
 }
