@@ -26,3 +26,40 @@
 ## 65536 2.205075e+02 6.531237e+02 2.959355e+03 4.915429e+02
 ## nbody  wtime(sec)  Gflops  wtime/block(usec)  nact
 ## 65536 2.210687e+02 6.507673e+02 2.984753e+03 4.939727e+02
+2014/10/28
+
+## Init N square : 247.592010 Gflops
+## nbody  wtime(sec)  Gflops  wtime/block(usec)  nact
+## 1024 3.226079e-01 4.542316e+01 7.424808e+01 5.489229e+01
+## nbody  wtime(sec)  Gflops  wtime/block(usec)  nact
+## 1024 3.455443e-01 4.581876e+01 7.230473e+01 5.392111e+01
+## Init N square : 444.547138 Gflops
+## nbody  wtime(sec)  Gflops  wtime/block(usec)  nact
+## 2048 6.233492e-01 1.098705e+02 8.619320e+01 7.706775e+01
+## nbody  wtime(sec)  Gflops  wtime/block(usec)  nact
+## 2048 6.260515e-01 1.101183e+02 8.560803e+01 7.671722e+01
+## Init N square : 644.500018 Gflops
+## nbody  wtime(sec)  Gflops  wtime/block(usec)  nact
+## 4096 1.478309e+00 2.246459e+02 1.193050e+02 1.090551e+02
+## nbody  wtime(sec)  Gflops  wtime/block(usec)  nact
+## 4096 1.439198e+00 2.365044e+02 1.209613e+02 1.164058e+02
+## Init N square : 828.736400 Gflops
+## nbody  wtime(sec)  Gflops  wtime/block(usec)  nact
+## 8192 3.721511e+00 4.064209e+02 2.006205e+02 1.658862e+02
+## nbody  wtime(sec)  Gflops  wtime/block(usec)  nact
+## 8192 3.711968e+00 4.118307e+02 2.019899e+02 1.692416e+02
+## Init N square : 942.281663 Gflops
+## nbody  wtime(sec)  Gflops  wtime/block(usec)  nact
+## 16384 1.202096e+01 5.793129e+02 4.019985e+02 2.369008e+02
+## nbody  wtime(sec)  Gflops  wtime/block(usec)  nact
+## 16384 1.184396e+01 5.867107e+02 4.095281e+02 2.444199e+02
+## Init N square : 1007.265668 Gflops
+## nbody  wtime(sec)  Gflops  wtime/block(usec)  nact
+## 32768 4.408523e+01 7.244493e+02 9.256157e+02 3.410653e+02
+## nbody  wtime(sec)  Gflops  wtime/block(usec)  nact
+## 32768 4.423587e+01 7.200304e+02 9.596675e+02 3.514556e+02
+## Init N square : 1030.737559 Gflops
+## nbody  wtime(sec)  Gflops  wtime/block(usec)  nact
+## 65536 1.799800e+02 8.001925e+02 2.415450e+03 4.915429e+02
+## nbody  wtime(sec)  Gflops  wtime/block(usec)  nact
+## 65536 1.798964e+02 7.997062e+02 2.428867e+03 4.939727e+02
