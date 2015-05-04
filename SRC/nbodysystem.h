@@ -623,6 +623,7 @@ breakpoint:
 		gravity->calc_force_on_first_nact(nact, eps2, force);
 	  prof.end(Profile::FORCE);
 
+#if 0
 	  prof.beg(Profile::CORRECT);
 #pragma omp parallel for
 		for(int i=0; i<nact; i++){
@@ -646,6 +647,32 @@ breakpoint:
 			gravity->set_jp(i, ptcl[i]);
 		}
 	  prof.end(Profile::SET_JP);
+#else
+#pragma omp parallel
+	  {
+#pragma omp master
+		  prof.beg(Profile::CORRECT);
+#pragma omp for
+		  for(int i=0; i<nact; i++){
+			  ptcl[i].correct(force[i], eta, etapow, dtlim);
+			  dtbuf[i] = ptcl[i].dt;
+		  }
+#pragma omp master
+		  {
+			  prof.end(Profile::CORRECT);
+			  prof.beg(Profile::SORT, true);
+			  sort_ptcl_dtcache(nact, dtlim);
+			  prof.end(Profile::SORT);
+			  prof.beg(Profile::SET_JP, true);
+		  }
+#pragma omp barrier
+#pragma omp for nowait
+		  for(int i=0; i<nact; i++){
+			  gravity->set_jp(i, ptcl[i]);
+		  }
+	  } // end omp parallel
+	  prof.end(Profile::SET_JP);
+#endif
 
 		num_step += nact;
 		num_bstep++;
