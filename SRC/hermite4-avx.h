@@ -180,7 +180,7 @@ struct Gravity{
 				const v4df vyi = tr2.c1;
 				const v4df vzi = tr2.c2;
 				const v4df eps2 = {deps2, deps2, deps2, deps2};
-#pragma omp for // calculate partial force
+#pragma omp for nowait // calculate partial force
 				for(int j=0; j<nj; j++){
 					v4df_bcast jbuf1(&pred[j].pos_mass);
 					v4df_bcast jbuf2(&pred[j].vel);
@@ -218,8 +218,20 @@ struct Gravity{
 				}
 				fobuf[ii].save(ax, ay, az, jx, jy, jz);
 			} // for(i)
+#pragma omp barrier
+#pragma omp for nowait
+			for(int i=is; i<ie; i+=4){
+				const int ii = (i-is)/4;
+				GForce fsum;
+				fsum.clear();
+				for(int ith=0; ith<nthreads; ith++){
+					fsum.accumulate(foptr[ith][ii]);
+				}
+				fsum.store_4_forces(force + i);
+			}
 		} // end omp parallel
 		// reduction & store
+#if 0
 		for(int i=is, ii=0; i<ie; i+=4, ii++){
 			GForce fsum;
 			fsum.clear();
@@ -228,6 +240,7 @@ struct Gravity{
 			}
 			fsum.store_4_forces(force + i);
 		}
+#endif
 	}
 
 	void calc_force_on_first_nact(
