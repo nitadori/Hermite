@@ -4,7 +4,7 @@
 
 struct Gravity{
 	enum{
-		NIMAX = 1024,
+		NIMAX = 2048,
 		MAXTHREAD = 64,
 	};
 
@@ -140,7 +140,7 @@ struct Gravity{
 		}
 	}
 	void predict_all_fast_omp(const double tsys){
-#pragma omp for
+#pragma omp for nowait
 		for(int i=0; i<nbody; i++){
 			const double tlast = *((double *)&ptcl[i].vel_time + 3);
 			const double dts = tsys - tlast;
@@ -332,7 +332,7 @@ struct Gravity{
 			fobuf[ii].save(ax, ay, az, jx, jy, jz);
 		} // for(i)
 #pragma omp barrier
-#pragma omp for
+#pragma omp for nowait
 		for(int i=is; i<ie; i+=4){
 			const int ii = (i-is)/4;
 			GForce fsum;
@@ -359,9 +359,15 @@ struct Gravity{
 			const double eps2,
 			Force        force[] )
 	{
-		for(int ii=0; ii<nact; ii+=NIMAX){
-			const int ni = (nact-ii) < NIMAX ? (nact-ii) : NIMAX;
-			calc_force_in_range_fast_omp(ii, ii+ni, eps2, force);
+		if(nact < NIMAX){
+			calc_force_in_range_fast_omp(0, nact, eps2, force);
+#pragma omp barrier
+		}else{
+			for(int ii=0; ii<nact; ii+=NIMAX){
+				const int ni = (nact-ii) < NIMAX ? (nact-ii) : NIMAX;
+				calc_force_in_range_fast_omp(ii, ii+ni, eps2, force);
+#pragma omp barrier
+			}
 		}
 	}
 

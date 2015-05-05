@@ -193,6 +193,37 @@ struct Gravity{
 			pred[i].jrk = jrk;
 		}
 	}
+	void predict_all_fast_omp(const double tsys){
+#pragma omp for nowait
+		for(int i=0; i<nbody; i++){
+			const double tlast = *((double *)&ptcl[i].vel_time + 3);
+			const double dts = tsys - tlast;
+			v4df dt = {dts, dts, dts, 0.0};
+			v4df dt2 = dt * (v4df){0.5, 0.5, 0.5, 0.0};
+			v4df dt3 = dt * (v4df){1./3., 1./3., 1./3., 0.0};
+			v4df dt4 = dt * (v4df){1./4., 1./4., 1./4., 0.0};
+			v4df dt5 = dt * (v4df){1./5., 1./5., 1./5., 0.0};
+			v4df dt6 = dt * (v4df){1./6., 1./6., 1./6., 0.0};
+			v4df dt7 = dt * (v4df){1./7., 1./7., 1./7., 0.0};
+
+			const GParticle &p = ptcl[i];
+			v4df pos_mass = p.pos_mass + dt * (p.vel_time
+					+ dt2 * (p.acc + dt3 * (p.jrk 
+							+ dt4 * (p.snp + dt5 * (p.crk
+									+ dt6 * (p.d4a + dt7 * (p.d5a)))))));
+			v4df vel = p.vel_time + dt * (p.acc + dt2 * (p.jrk 
+					+ dt3 * (p.snp + dt4 * (p.crk
+							+ dt5 * (p.d4a + dt6 * (p.d5a))))));
+			v4df acc = p.acc + dt * (p.jrk + dt2 * (p.snp + dt3 * (p.crk
+					+ dt4 * (p.d4a + dt5 * (p.d5a)))));
+			v4df jrk = p.jrk + dt * (p.snp + dt2 * (p.crk + dt3 * (p.d4a + dt4 * (p.d5a))));
+
+			pred[i].pos_mass = pos_mass;
+			pred[i].vel = vel;
+			pred[i].acc = acc;
+			pred[i].jrk = jrk;
+		}
+	}
 
 	void calc_force_in_range(
 			const int    is,
@@ -360,6 +391,156 @@ struct Gravity{
 		}
 #endif
 	}
+	void calc_force_in_range_fast_omp(
+			const int    is,
+			const int    ie,
+			const double deps2,
+			Force        force[] )
+	{
+		static __thread GForce fobuf[NIMAX/4];
+		static GForce *foptr[MAXTHREAD];
+		const int tid = omp_get_thread_num();
+		const int nthreads = omp_get_num_threads();
+		// foptr[tid] = fobuf;
+		if(foptr[tid] != fobuf) foptr[tid] = fobuf;
+		const int nj = nbody;
+		// simiple i-parallel AVX force
+		for(int i=is, ii=0; i<ie; i+=4, ii++){
+			v4df ax = {0.0, 0.0, 0.0, 0.0};
+			v4df ay = {0.0, 0.0, 0.0, 0.0};
+			v4df az = {0.0, 0.0, 0.0, 0.0};
+			v4df jx = {0.0, 0.0, 0.0, 0.0};
+			v4df jy = {0.0, 0.0, 0.0, 0.0};
+			v4df jz = {0.0, 0.0, 0.0, 0.0};
+			v4df sx = {0.0, 0.0, 0.0, 0.0};
+			v4df sy = {0.0, 0.0, 0.0, 0.0};
+			v4df sz = {0.0, 0.0, 0.0, 0.0};
+			v4df cx = {0.0, 0.0, 0.0, 0.0};
+			v4df cy = {0.0, 0.0, 0.0, 0.0};
+			v4df cz = {0.0, 0.0, 0.0, 0.0};
+			v4df_transpose tr1(pred[i+0].pos_mass, 
+					pred[i+1].pos_mass, 
+					pred[i+2].pos_mass, 
+					pred[i+3].pos_mass);
+			v4df_transpose tr2(pred[i+0].vel, 
+					pred[i+1].vel, 
+					pred[i+2].vel, 
+					pred[i+3].vel);
+			v4df_transpose tr3(pred[i+0].acc, 
+					pred[i+1].acc, 
+					pred[i+2].acc, 
+					pred[i+3].acc);
+			v4df_transpose tr4(pred[i+0].jrk, 
+					pred[i+1].jrk, 
+					pred[i+2].jrk, 
+					pred[i+3].jrk);
+			const v4df xi = tr1.c0;
+			const v4df yi = tr1.c1;
+			const v4df zi = tr1.c2;
+			const v4df vxi = tr2.c0;
+			const v4df vyi = tr2.c1;
+			const v4df vzi = tr2.c2;
+			const v4df axi = tr3.c0;
+			const v4df ayi = tr3.c1;
+			const v4df azi = tr3.c2;
+			const v4df jxi = tr4.c0;
+			const v4df jyi = tr4.c1;
+			const v4df jzi = tr4.c2;
+			const v4df eps2 = {deps2, deps2, deps2, deps2};
+#pragma omp for nowait // calculate partial force
+			for(int j=0; j<nj; j++){
+				v4df_bcast jbuf1(&pred[j].pos_mass);
+				v4df_bcast jbuf2(&pred[j].vel);
+				v4df_bcast jbuf3(&pred[j].acc);
+				v4df_bcast jbuf4(&pred[j].jrk);
+				const v4df xj = jbuf1.e0;
+				const v4df yj = jbuf1.e1;
+				const v4df zj = jbuf1.e2;
+				const v4df mj = jbuf1.e3;
+				const v4df vxj = jbuf2.e0;
+				const v4df vyj = jbuf2.e1;
+				const v4df vzj = jbuf2.e2;
+				const v4df axj = jbuf3.e0;
+				const v4df ayj = jbuf3.e1;
+				const v4df azj = jbuf3.e2;
+				const v4df jxj = jbuf4.e0;
+				const v4df jyj = jbuf4.e1;
+				const v4df jzj = jbuf4.e2;
+
+				const v4df dx = xj - xi;
+				const v4df dy = yj - yi;
+				const v4df dz = zj - zi;
+				const v4df dvx = vxj - vxi;
+				const v4df dvy = vyj - vyi;
+				const v4df dvz = vzj - vzi;
+				const v4df dax = axj - axi;
+				const v4df day = ayj - ayi;
+				const v4df daz = azj - azi;
+				const v4df djx = jxj - jxi;
+				const v4df djy = jyj - jyi;
+				const v4df djz = jzj - jzi;
+
+				const v4df dr2 = eps2 + dx*dx + dy*dy + dz*dz;
+				const v4df drdv =  dx*dvx +  dy*dvy +  dz*dvz;
+				const v4df dvdv = dvx*dvx + dvy*dvy + dvz*dvz;
+				const v4df drda =  dx*dax +  dy*day +  dz*daz;
+				const v4df dvda = dvx*dax + dvy*day + dvz*daz;
+				const v4df drdj =  dx*djx +  dy*djy +  dz*djz;
+
+				const v4df rinv1 = v4df_rsqrt(dr2);
+				const v4df rinv2 = rinv1 * rinv1;
+				const v4df mrinv3 = mj * rinv1 * rinv2;
+
+				const v4df three = {3.0, 3.0, 3.0, 3.0};
+				const v4df four  = {4.0, 4.0, 4.0, 4.0};
+				v4df alpha = drdv * rinv2;
+				v4df beta  = (dvdv + drda) * rinv2 + alpha*alpha;
+				v4df gamma = (three*dvda + drdj) * rinv2
+					+ alpha * (three*beta - four*alpha*alpha);
+
+				ax += mrinv3 * dx;
+				ay += mrinv3 * dy;
+				az += mrinv3 * dz;
+
+				alpha *= (v4df){-3.0, -3.0, -3.0, -3.0};
+				v4df tx = dvx + alpha * dx;
+				v4df ty = dvy + alpha * dy;
+				v4df tz = dvz + alpha * dz;
+				jx += mrinv3 * tx;
+				jy += mrinv3 * ty;
+				jz += mrinv3 * tz;
+
+				alpha *= (v4df){2.0, 2.0, 2.0, 2.0};     // -6.0
+				beta  *= (v4df){-3.0, -3.0, -3.0, -3.0}; // -3.0
+				v4df ux = dax + alpha * tx + beta * dx;
+				v4df uy = day + alpha * ty + beta * dy;
+				v4df uz = daz + alpha * tz + beta * dz;
+				sx += mrinv3 * ux;
+				sy += mrinv3 * uy;
+				sz += mrinv3 * uz;
+
+				alpha *= (v4df){1.5, 1.5, 1.5, 1.5};     // -9.0
+				beta  *= (v4df){3.0, 3.0, 3.0, 3.0};     // -9.0
+				gamma *= (v4df){-3.0, -3.0, -3.0, -3.0}; // -3.0
+				cx += mrinv3 * (djx + alpha * ux + beta * tx + gamma * dx);
+				cy += mrinv3 * (djy + alpha * uy + beta * ty + gamma * dy);
+				cz += mrinv3 * (djz + alpha * uz + beta * tz + gamma * dz);
+			}
+			fobuf[ii].save(ax, ay, az, jx, jy, jz, 
+					sx, sy, sz, cx, cy, cz);
+		} // for(i)
+#pragma omp barrier
+#pragma omp for nowait
+		for(int i=is; i<ie; i+=4){
+			const int ii = (i-is)/4;
+			GForce fsum;
+			fsum.clear();
+			for(int ith=0; ith<nthreads; ith++){
+				fsum.accumulate(foptr[ith][ii]);
+			}
+			fsum.store_4_forces(force + i);
+		}
+	}
 
 	void calc_force_on_first_nact(
 			const int    nact,
@@ -369,6 +550,22 @@ struct Gravity{
 		for(int ii=0; ii<nact; ii+=NIMAX){
 			const int ni = (nact-ii) < NIMAX ? (nact-ii) : NIMAX;
 			calc_force_in_range(ii, ii+ni, eps2, force);
+		}
+	}
+	void calc_force_on_first_nact_fast_omp(
+			const int    nact,
+			const double eps2,
+			Force        force[] )
+	{
+		if(nact < NIMAX){
+			calc_force_in_range_fast_omp(0, nact, eps2, force);
+#pragma omp barrier
+		}else{
+			for(int ii=0; ii<nact; ii+=NIMAX){
+				const int ni = (nact-ii) < NIMAX ? (nact-ii) : NIMAX;
+				calc_force_in_range_fast_omp(ii, ii+ni, eps2, force);
+#pragma omp barrier
+			}
 		}
 	}
 
