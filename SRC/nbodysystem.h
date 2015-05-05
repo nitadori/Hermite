@@ -98,6 +98,21 @@ struct Profile{
 		tprev = wtime();
 		time[elem] += tprev;
 	}
+	void beg_master(const int elem, const bool reuse = false){
+#pragma omp master
+		{
+			if(reuse) time[elem] -= tprev;
+			else      time[elem] -= wtime();
+		}
+	}
+	void end_master(const int elem){
+#pragma omp master
+		{
+			// time[elem] += wtime();
+			tprev = wtime();
+			time[elem] += tprev;
+		}
+	}
 	void show(
 			const long nbody,
 			const long num_step_tot,
@@ -680,11 +695,66 @@ breakpoint:
 		tsys = tnext;
 	}
 
+#ifdef FAST_OMP_SYNC
+	void integrate_one_dtmax_fast_omp(){
+		const double tt = tsys + dtmax;
+#     pragma omp parallel
+		{
+			double tsys_loc = this->tsys;
+			while(tsys_loc < tt){
+				prof.beg_master(Profile::SORT, true);
+				const double tnext = ptcl[0].tlast + ptcl[0].dt;
+				const double dtlim = calc_dtlim(tnext);
+				const int    nact  = count_nact(tnext);
+				prof.end_master(Profile::SORT);
+
+				prof.beg_master(Profile::PREDICT, true);
+#             pragma omp barrier
+				gravity->predict_all_fast_omp(tnext);
+				prof.end_master(Profile::PREDICT);
+				prof.beg_master(Profile::FORCE, true);
+#             pragma omp barrier
+				gravity->calc_force_on_first_nact_fast_omp(nact, eps2, force);
+				prof.end_master(Profile::FORCE);
+// #             pragma omp barrier
+				prof.beg_master(Profile::CORRECT, true);
+#             pragma omp for
+				for(int i=0; i<nact; i++){
+					ptcl[i].correct(force[i], eta, etapow, dtlim);
+					dtbuf[i] = ptcl[i].dt;
+				}
+				prof.end_master(Profile::CORRECT);
+				prof.beg_master(Profile::SORT, true);
+#             pragma omp master
+				{
+					sort_ptcl_dtcache(nact, dtlim);
+					this->num_step += nact;
+					this->num_bstep++;
+				}
+#             pragma omp barrier
+				prof.end_master(Profile::SORT);
+				prof.beg_master(Profile::SET_JP, true);
+#             pragma omp for nowait
+				for(int i=0; i<nact; i++){
+					gravity->set_jp(i, ptcl[i]);
+				}
+				prof.end_master(Profile::SET_JP);
+				tsys_loc = tnext;
+			} // while (tsys_loc < tt)
+		} // end omp parallel
+		tsys = tt;
+	}
+#endif
+
 	void integrate_one_dtmax(){
 		const double tt = tsys + dtmax;
+#if !defined FAST_OMP_SYNC
 		while(tsys < tt){
 			integrate_one_block();
 		}
+#else
+		integrate_one_dtmax_fast_omp();
+#endif
 		assert(tsys == tt);
 	}
 

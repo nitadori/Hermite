@@ -139,6 +139,21 @@ struct Gravity{
 			pred[i].vel = vel;
 		}
 	}
+	void predict_all_fast_omp(const double tsys){
+#pragma omp for
+		for(int i=0; i<nbody; i++){
+			const double tlast = *((double *)&ptcl[i].vel_time + 3);
+			const double dts = tsys - tlast;
+			v4df dt = {dts, dts, dts, 0.0};
+			v4df dt2 = dt * (v4df){0.5, 0.5, 0.5, 0.0};
+			v4df dt3 = dt * (v4df){1./3., 1./3., 1./3., 0.0};
+			const GParticle &p = ptcl[i];
+			v4df pos_mass = p.pos_mass + dt * (p.vel_time + dt2 * (p.acc + dt3 * (p.jrk)));
+			v4df vel = p.vel_time + dt * (p.acc + dt2 * (p.jrk));
+			pred[i].pos_mass = pos_mass;
+			pred[i].vel = vel;
+		}
+	}
 
 	void calc_force_in_range(
 			const int    is,
@@ -242,6 +257,92 @@ struct Gravity{
 		}
 #endif
 	}
+	void calc_force_in_range_fast_omp(
+			const int    is,
+			const int    ie,
+			const double deps2,
+			Force        force[] )
+	{
+		static __thread GForce fobuf[NIMAX/4];
+		static GForce *foptr[MAXTHREAD];
+		const int tid = omp_get_thread_num();
+		const int nthreads = omp_get_num_threads();
+		// foptr[tid] = fobuf;
+		if(foptr[tid] != fobuf) foptr[tid] = fobuf;
+		const int nj = nbody;
+		// simiple i-parallel AVX force
+		for(int i=is, ii=0; i<ie; i+=4, ii++){
+			v4df ax = {0.0, 0.0, 0.0, 0.0};
+			v4df ay = {0.0, 0.0, 0.0, 0.0};
+			v4df az = {0.0, 0.0, 0.0, 0.0};
+			v4df jx = {0.0, 0.0, 0.0, 0.0};
+			v4df jy = {0.0, 0.0, 0.0, 0.0};
+			v4df jz = {0.0, 0.0, 0.0, 0.0};
+			v4df_transpose tr1(pred[i+0].pos_mass, 
+					pred[i+1].pos_mass, 
+					pred[i+2].pos_mass, 
+					pred[i+3].pos_mass);
+			v4df_transpose tr2(pred[i+0].vel, 
+					pred[i+1].vel, 
+					pred[i+2].vel, 
+					pred[i+3].vel);
+			const v4df xi = tr1.c0;
+			const v4df yi = tr1.c1;
+			const v4df zi = tr1.c2;
+			const v4df vxi = tr2.c0;
+			const v4df vyi = tr2.c1;
+			const v4df vzi = tr2.c2;
+			const v4df eps2 = {deps2, deps2, deps2, deps2};
+#pragma omp for nowait // calculate partial force
+			for(int j=0; j<nj; j++){
+				v4df_bcast jbuf1(&pred[j].pos_mass);
+				v4df_bcast jbuf2(&pred[j].vel);
+				const v4df xj = jbuf1.e0;
+				const v4df yj = jbuf1.e1;
+				const v4df zj = jbuf1.e2;
+				const v4df mj = jbuf1.e3;
+				const v4df vxj = jbuf2.e0;
+				const v4df vyj = jbuf2.e1;
+				const v4df vzj = jbuf2.e2;
+
+				const v4df dx = xj - xi;
+				const v4df dy = yj - yi;
+				const v4df dz = zj - zi;
+				const v4df dvx = vxj - vxi;
+				const v4df dvy = vyj - vyi;
+				const v4df dvz = vzj - vzi;
+
+				const v4df dr2 = eps2 + dx*dx + dy*dy + dz*dz;
+				const v4df drdv = dx*dvx + dy*dvy + dz*dvz;
+
+				const v4df rinv1 = v4df_rsqrt(dr2);
+				const v4df rinv2 = rinv1 * rinv1;
+				const v4df mrinv3 = mj * rinv1 * rinv2;
+
+				v4df alpha = drdv * rinv2;
+				alpha *= (v4df){-3.0, -3.0, -3.0, -3.0};
+
+				ax += mrinv3 * dx;
+				ay += mrinv3 * dy;
+				az += mrinv3 * dz;
+				jx += mrinv3 * (dvx + alpha * dx);
+				jy += mrinv3 * (dvy + alpha * dy);
+				jz += mrinv3 * (dvz + alpha * dz);
+			}
+			fobuf[ii].save(ax, ay, az, jx, jy, jz);
+		} // for(i)
+#pragma omp barrier
+#pragma omp for
+		for(int i=is; i<ie; i+=4){
+			const int ii = (i-is)/4;
+			GForce fsum;
+			fsum.clear();
+			for(int ith=0; ith<nthreads; ith++){
+				fsum.accumulate(foptr[ith][ii]);
+			}
+			fsum.store_4_forces(force + i);
+		}
+	}
 
 	void calc_force_on_first_nact(
 			const int    nact,
@@ -251,6 +352,16 @@ struct Gravity{
 		for(int ii=0; ii<nact; ii+=NIMAX){
 			const int ni = (nact-ii) < NIMAX ? (nact-ii) : NIMAX;
 			calc_force_in_range(ii, ii+ni, eps2, force);
+		}
+	}
+	void calc_force_on_first_nact_fast_omp(
+			const int    nact,
+			const double eps2,
+			Force        force[] )
+	{
+		for(int ii=0; ii<nact; ii+=NIMAX){
+			const int ni = (nact-ii) < NIMAX ? (nact-ii) : NIMAX;
+			calc_force_in_range_fast_omp(ii, ii+ni, eps2, force);
 		}
 	}
 

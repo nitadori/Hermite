@@ -5,6 +5,7 @@ CXXFLAGS = -Wall -O2
 CXXFLAGS += -march=core-avx2
 #CXXFLAGS += -march=bdver2
 CXXFLAGS += -fopenmp
+CXXFLAGS += -DFAST_OMP_SYNC
 #CXXFLAGS += -ffast-math
 
 all: cpu-4th cpu-6th cpu-8th avx2-4th avx2-6th avx2-8th
