@@ -116,8 +116,14 @@ struct Particle{
 	}
 
 	void correct(const Force &f, const double eta, const double etapow, const double dtlim){
+#if 0
 		const double h = 0.5 * dt;
 		const double hinv = 2.0/dt;
+#else
+		const InvForDt tmp(dt);
+		const double h    = tmp.h;
+		const double hinv = tmp.hinv;
+#endif
 
 		const dvec3 Ap = (f.acc + acc);
 		const dvec3 Am = (f.acc - acc);

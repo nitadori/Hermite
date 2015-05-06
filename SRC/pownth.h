@@ -17,3 +17,18 @@ double pow_one_nth_quant(const double x){
 	m64.l <<= 52;
 	return m64.d;
 }
+
+struct InvForDt{
+	double h, hinv;
+	InvForDt(const double dt){
+		union{
+			double d;
+			unsigned long l;
+		}m64;
+		m64.d = dt;
+		m64.l -= 1L<<52;
+		h = m64.d;
+		m64.l = (2046L<<52) - m64.l;
+		hinv = m64.d;
+	}
+};

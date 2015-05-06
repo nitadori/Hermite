@@ -263,7 +263,7 @@ struct Gravity{
 			const double deps2,
 			Force        force[] )
 	{
-		static __thread GForce fobuf[NIMAX/4];
+		static __thread GForce fobuf[NIMAX/4 + 1];
 		static GForce *foptr[MAXTHREAD];
 		const int tid = omp_get_thread_num();
 		const int nthreads = omp_get_num_threads();
@@ -286,6 +286,12 @@ struct Gravity{
 					pred[i+1].vel, 
 					pred[i+2].vel, 
 					pred[i+3].vel);
+#if 0
+			__builtin_prefetch(&pred[i+4]);
+			__builtin_prefetch(&pred[i+5]);
+			__builtin_prefetch(&pred[i+6]);
+			__builtin_prefetch(&pred[i+7]);
+#endif
 			const v4df xi = tr1.c0;
 			const v4df yi = tr1.c1;
 			const v4df zi = tr1.c2;

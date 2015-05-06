@@ -30,6 +30,8 @@ struct Profile{
 	void flush(){}
 	void beg(const int elem, const bool reuse = false){}
 	void end(const int elem){}
+	void beg_master(const int elem, const bool reuse = false){}
+	void end_master(const int elem){}
 	void show(
 			FILE *fp = stderr,
 			const char *fmt = " %s : %e\n")
@@ -718,10 +720,18 @@ breakpoint:
 				prof.end_master(Profile::FORCE);
 // #             pragma omp barrier
 				prof.beg_master(Profile::CORRECT, true);
-#             pragma omp for
-				for(int i=0; i<nact; i++){
-					ptcl[i].correct(force[i], eta, etapow, dtlim);
-					dtbuf[i] = ptcl[i].dt;
+				if(nact > 10){
+#                 pragma omp for
+					for(int i=0; i<nact; i++){
+						ptcl[i].correct(force[i], eta, etapow, dtlim);
+						dtbuf[i] = ptcl[i].dt;
+					}
+				}else{
+#                 pragma omp master
+					for(int i=0; i<nact; i++){
+						ptcl[i].correct(force[i], eta, etapow, dtlim);
+						dtbuf[i] = ptcl[i].dt;
+					}
 				}
 				prof.end_master(Profile::CORRECT);
 				prof.beg_master(Profile::SORT, true);
