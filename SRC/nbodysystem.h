@@ -720,7 +720,7 @@ breakpoint:
 				prof.end_master(Profile::FORCE);
 // #             pragma omp barrier
 				prof.beg_master(Profile::CORRECT, true);
-				if(nact > 10){
+				if(nact > Gravity::NACT_PARALLEL_THRESH){
 #                 pragma omp for
 					for(int i=0; i<nact; i++){
 						ptcl[i].correct(force[i], eta, etapow, dtlim);

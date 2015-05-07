@@ -6,6 +6,7 @@ struct Gravity{
 	enum{
 		NIMAX = 2048,
 		MAXTHREAD = 64,
+		NACT_PARALLEL_THRESH = 12,
 	};
 
 	struct GParticle{
@@ -93,6 +94,13 @@ struct Gravity{
 			dst[4] = ym4;
 			dst[5] = ym5;
 #endif
+		}
+
+		void prefetch() const{
+			const double *ptr = (const double *)this;
+			__builtin_prefetch(ptr +  0);
+			__builtin_prefetch(ptr +  8);
+			__builtin_prefetch(ptr + 16);
 		}
 	};
 
@@ -338,15 +346,36 @@ struct Gravity{
 			fobuf[ii].save(ax, ay, az, jx, jy, jz);
 		} // for(i)
 #pragma omp barrier
-#pragma omp for nowait
-		for(int i=is; i<ie; i+=4){
-			const int ii = (i-is)/4;
-			GForce fsum;
-			fsum.clear();
-			for(int ith=0; ith<nthreads; ith++){
-				fsum.accumulate(foptr[ith][ii]);
-			}
-			fsum.store_4_forces(force + i);
+		if(ie-is <= NACT_PARALLEL_THRESH){
+#pragma omp master
+			for(int i=is; i<ie; i+=4){
+				const int ii = (i-is)/4;
+				GForce fsum;
+				fsum.clear();
+				for(int ith=0; ith<nthreads; ith++){
+					// burn-out LLC
+					foptr[ith][ii].prefetch();
+				}
+				for(int ith=0; ith<nthreads; ith++){
+					fsum.accumulate(foptr[ith][ii]);
+				}
+				fsum.store_4_forces(force + i);
+			} // no wait, return and goto corrector
+		}else{
+#pragma omp for
+			for(int i=is; i<ie; i+=4){
+				const int ii = (i-is)/4;
+				GForce fsum;
+				fsum.clear();
+				for(int ith=0; ith<nthreads; ith++){
+					// burn-out LLC
+					foptr[ith][ii].prefetch();
+				}
+				for(int ith=0; ith<nthreads; ith++){
+					fsum.accumulate(foptr[ith][ii]);
+				}
+				fsum.store_4_forces(force + i);
+			} // here comes a barrier
 		}
 	}
 
@@ -367,12 +396,12 @@ struct Gravity{
 	{
 		if(nact < NIMAX){
 			calc_force_in_range_fast_omp(0, nact, eps2, force);
-#pragma omp barrier
+// #pragma omp barrier
 		}else{
 			for(int ii=0; ii<nact; ii+=NIMAX){
 				const int ni = (nact-ii) < NIMAX ? (nact-ii) : NIMAX;
 				calc_force_in_range_fast_omp(ii, ii+ni, eps2, force);
-#pragma omp barrier
+// #pragma omp barrier
 			}
 		}
 	}
