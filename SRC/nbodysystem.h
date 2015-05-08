@@ -711,7 +711,7 @@ breakpoint:
 				prof.end_master(Profile::SORT);
 
 				prof.beg_master(Profile::PREDICT, true);
-#             pragma omp barrier
+// #             pragma omp barrier
 				gravity->predict_all_fast_omp(tnext);
 				prof.end_master(Profile::PREDICT);
 				prof.beg_master(Profile::FORCE, true);
@@ -719,6 +719,7 @@ breakpoint:
 				gravity->calc_force_on_first_nact_fast_omp(nact, eps2, force);
 				prof.end_master(Profile::FORCE);
 // #             pragma omp barrier
+#if 0
 				prof.beg_master(Profile::CORRECT, true);
 				if(nact > Gravity::NACT_PARALLEL_THRESH){
 #                 pragma omp for
@@ -744,11 +745,65 @@ breakpoint:
 #             pragma omp barrier
 				prof.end_master(Profile::SORT);
 				prof.beg_master(Profile::SET_JP, true);
-#             pragma omp for nowait
-				for(int i=0; i<nact; i++){
-					gravity->set_jp(i, ptcl[i]);
+				if(nact > Gravity::NACT_PARALLEL_THRESH){
+#                 pragma omp for nowait
+					for(int i=0; i<nact; i++){
+						gravity->set_jp(i, ptcl[i]);
+					}
+				}else{
+#                 pragma omp master
+					for(int i=0; i<nact; i++){
+						gravity->set_jp(i, ptcl[i]);
+					}
 				}
 				prof.end_master(Profile::SET_JP);
+#else
+				if(nact > Gravity::NACT_PARALLEL_THRESH){
+					prof.beg_master(Profile::CORRECT, true);
+#                 pragma omp for
+					for(int i=0; i<nact; i++){
+						ptcl[i].correct(force[i], eta, etapow, dtlim);
+						dtbuf[i] = ptcl[i].dt;
+					}
+					prof.end_master(Profile::CORRECT);
+					prof.beg_master(Profile::SORT, true);
+#                 pragma omp master
+					{
+						sort_ptcl_dtcache(nact, dtlim);
+						this->num_step += nact;
+						this->num_bstep++;
+					}
+#                 pragma omp barrier
+					prof.end_master(Profile::SORT);
+					prof.beg_master(Profile::SET_JP, true);
+#                 pragma omp for nowait
+					for(int i=0; i<nact; i++){
+						gravity->set_jp(i, ptcl[i]);
+					}
+					prof.end_master(Profile::SET_JP);
+				}else{
+#                 pragma omp master
+					{
+						prof.beg(Profile::CORRECT, true);
+						for(int i=0; i<nact; i++){
+							ptcl[i].correct(force[i], eta, etapow, dtlim);
+							dtbuf[i] = ptcl[i].dt;
+						}
+						prof.end(Profile::CORRECT);
+						prof.beg(Profile::SORT, true);
+						sort_ptcl_dtcache(nact, dtlim);
+						this->num_step += nact;
+						this->num_bstep++;
+						prof.end(Profile::SORT);
+						prof.beg(Profile::SET_JP, true);
+						for(int i=0; i<nact; i++){
+							gravity->set_jp(i, ptcl[i]);
+						}
+						prof.end(Profile::SET_JP);
+					} // end master
+				} // end if(nac > ...)
+#             pragma omp barrier
+#endif
 				tsys_loc = tnext;
 			} // while (tsys_loc < tt)
 		} // end omp parallel
