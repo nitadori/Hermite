@@ -268,6 +268,7 @@ struct Gravity{
 
 		const F64vec8 eps2(deps2);
 		F64vec8 coef(3.0, 1.0, 0.5, 0.375);
+		// F64vec8 coef(3.0, 1.0, 3./7., 0.375);
 
 		for(int ii=iibeg; ii<iiend; ii+=4){
 			const int iii = is + ii;
@@ -315,6 +316,7 @@ struct Gravity{
 				const F64vec8 rv = dz*dvz + (dy*dvy + (dx*dvx));
 
 				const F64vec8 rinv   = rsqrt_pd_x3(r2, coef.bbbb(), coef.cccc(), coef.dddd());
+				// const F64vec8 rinv   = rsqrt_pd_x3_v2(r2, coef.bbbb(), coef.cccc(), coef.dddd());
 				const F64vec8 rinv2  = rinv * rinv;
 				const F64vec8 mrinv  = rinv * jxbuf.dddd();
 				const F64vec8 mrinv3 = mrinv * rinv2;

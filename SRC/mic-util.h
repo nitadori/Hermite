@@ -32,6 +32,19 @@ static inline __m512d rsqrt_pd_x3(
 	return tmp * y0;
 }
 
+static inline __m512d rsqrt_pd_x3_v2(
+		__m512d x, __m512d _one, __m512d _7_ov_3, __m512d _3_ov_8)
+{
+	F64vec8 y0 =  _mm512_cvtpslo_pd(
+	                _mm512_rsqrt23_ps(
+					   	_mm512_cvtpd_pslo(x)));
+	F64vec8 y2 = y0*y0;
+	F64vec8 h0 = _one - x*y2;
+	F64vec8 ha = _7_ov_3 - x*y2;
+	F64vec8 p  = (_3_ov_8 * h0) * ha;
+	return (y0 + p*y0);
+}
+
 static inline F64vec8 permute4f128(F64vec8 inp, _MM_PERM_ENUM perm){
 	return (F64vec8)_mm512_permute4f128_epi32(
 			_mm512_castpd_si512(inp), perm);
