@@ -551,7 +551,7 @@ struct Gravity{
 					sx, sy, sz, cx, cy, cz);
 		} // for(i)
 #pragma omp barrier
-		if(ie-is <= NACT_PARALLEL_THRESH){
+		if(0 == is && ie-is <= NACT_PARALLEL_THRESH){
 #pragma omp master
 			for(int i=is; i<ie; i+=4){
 				const int ii = (i-is)/4;
