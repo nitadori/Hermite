@@ -20,6 +20,7 @@ struct Profile{
 		PREDICT,
 		CORRECT,
 		SORT,
+		SCAN,
 		SET_JP,
 		IO,
 		// don't touch the below
@@ -59,6 +60,7 @@ struct Profile{
 		PREDICT,
 		CORRECT,
 		SORT,
+		SCAN,
 		SET_JP,
 		IO,
 		// don't touch the below
@@ -74,6 +76,7 @@ struct Profile{
 			"predict ",
 			"correct ",
 			"sort    ",
+			"scan    ",
 			"set_jp  ",
 			"I/O     ",
 			"total   ",
@@ -478,6 +481,10 @@ struct NbodySystem{
 			dt *= 0.5;
 		}
 #endif
+		// for next count_nact
+		for(int i=0; i<nact; i++){
+			dtbuf[i] = ptcl[i].dt + ptcl[i].tlast;
+		}
 	}
 	__attribute__((noinline))
 	void sort_ptcl_dtcache(const int nact, const double dtlim){
@@ -517,6 +524,10 @@ breakpoint:
 			end = i;
 			// printf("done : %lx\n", dtl);
 			dtl -= 1L << 52;
+		}
+		// for next count_nact
+		for(int i=0; i<nact; i++){
+			dtbuf[i] = ptcl[i].dt + ptcl[i].tlast;
 		}
 	}
 
@@ -616,19 +627,41 @@ breakpoint:
 	}
 
 	int count_nact(const double tnext) const {
+#if 1
 		int nact;
 		for(nact = 0; nact<nbody; nact++){
+#if 0
 			const Particle &p = ptcl[nact];
 			if(p.dt + p.tlast != tnext) break;
+#else
+			if(dtbuf[nact] != tnext) break;
+#endif
 		}
 		return nact;
+#else
+		int nact = 0;
+		int skip = 64;
+		for(;;){
+			if(nact == nbody) return nact;
+			if(nact < nbody && dtbuf[nact+skip] == tnext){
+				nact += skip;
+				continue;
+			}else{
+				if(1 == skip) return nact+1;
+				skip /= 4;
+				continue;
+			}
+		}
+#endif
 	}
 
 	__attribute__((noinline))
 	void integrate_one_block(){
+		prof.beg(Profile::SCAN, true);
 		const double tnext = ptcl[0].tlast + ptcl[0].dt;
 		const double dtlim = calc_dtlim(tnext);
 		const int    nact  = count_nact(tnext);
+		prof.end(Profile::SCAN);
 #if 0
 		printf("t = %f, nact = %6d, dtlim = %A\n", tsys, nact, dtlim);
 #endif
@@ -704,11 +737,12 @@ breakpoint:
 		{
 			double tsys_loc = this->tsys;
 			while(tsys_loc < tt){
-				prof.beg_master(Profile::SORT, true);
-				const double tnext = ptcl[0].tlast + ptcl[0].dt;
+				prof.beg_master(Profile::SCAN, true);
+				// const double tnext = ptcl[0].tlast + ptcl[0].dt;
+				const double tnext = dtbuf[0];
 				const double dtlim = calc_dtlim(tnext);
 				const int    nact  = count_nact(tnext);
-				prof.end_master(Profile::SORT);
+				prof.end_master(Profile::SCAN);
 
 				prof.beg_master(Profile::PREDICT, true);
 // #             pragma omp barrier
