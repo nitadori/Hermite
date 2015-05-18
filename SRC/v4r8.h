@@ -65,11 +65,13 @@ struct v4r8{
 	v4r8 operator*=(const v4r8 rhs){
 		return ( (*this) = (*this) * rhs );
 	}
+	__attribute__((always_inline))
 	v4r8 rsqrta() const {
 		return v4r8(
 				v2r8(v0).rsqrta(),
 				v2r8(v1).rsqrta());
 	}
+	__attribute__((always_inline))
 	v4r8 rsqrta_x8() const {
 		return v4r8(
 				v2r8(v0).rsqrta_x8(),

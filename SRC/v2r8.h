@@ -52,9 +52,11 @@ struct v2r8{
 		return (*this);
 	}
 
+	__attribute__((always_inline))
 	v2r8 rsqrta() const {
 		return v2r8(__builtin_fj_rsqrta_v2r8(val));
 	}
+	__attribute__((always_inline))
 	v2r8 rsqrta_x8() const {
 		const v2r8 x(val);
 		const v2r8 y0 = v2r8(__builtin_fj_rsqrta_v2r8(val));
