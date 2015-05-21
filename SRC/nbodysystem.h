@@ -97,7 +97,7 @@ struct Profile{
 	}
 	void beg(const int elem, const bool reuse = false){
 		if(reuse) time[elem] -= tprev;
-		else      time[elem] -= wtime();
+		else      time[elem] -= (tprev=wtime());
 	}
 	void end(const int elem){
 		// time[elem] += wtime();
@@ -108,7 +108,7 @@ struct Profile{
 #pragma omp master
 		{
 			if(reuse) time[elem] -= tprev;
-			else      time[elem] -= wtime();
+			else      time[elem] -= (tprev=wtime());
 		}
 	}
 	void end_master(const int elem){
@@ -814,15 +814,15 @@ breakpoint:
 						dtbuf[i] = ptcl[i].dt;
 					}
 					prof.end_master(Profile::CORRECT);
-					prof.beg_master(Profile::SORT, true);
 #                 pragma omp master
 					{
+						prof.beg(Profile::SORT, true);
 						sort_ptcl_dtcache(nact, dtlim);
 						this->num_step += nact;
 						this->num_bstep++;
+						prof.end(Profile::SORT);
 					}
 #                 pragma omp barrier
-					prof.end_master(Profile::SORT);
 					prof.beg_master(Profile::SET_JP, true);
 #                 pragma omp for nowait
 					for(int i=0; i<nact; i++){
@@ -878,7 +878,7 @@ breakpoint:
 	void integrate(const double tcrit){
 		prof.flush();
 		prof.beg(Profile::TOTAL);
-        while(tsys < tcrit){
+		while(tsys < tcrit){
 			double t0 = Profile::wtime();
 			integrate_one_dtmax();
 			double t1 = Profile::wtime();

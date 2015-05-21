@@ -1,7 +1,7 @@
 VPATH = ../SRC
 CXX = mpiFCCpx
 CXXFLAGS = -Kfast,uxsimd,optmsg=2 -Xg -x32 -Nsrc
-#CXXFLAGS += -Kocl
+CXXFLAGS += -Kocl
 CXXFLAGS += -Kopenmp
 CXXFLAGS += -lfjcex
 
