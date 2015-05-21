@@ -4,7 +4,6 @@
 #include "hermite4-k.h"
 
 
-#if 1
 void Gravity::predict_all_rp(
 		const int nbody, 
 		const double s_tsys, 
@@ -13,6 +12,8 @@ void Gravity::predict_all_rp(
 {
 	const v2r8 tsys(s_tsys);
 	const int nb2 = nbody / 2;
+#pragma loop noswp
+#pragma loop unroll 8
 #pragma omp parallel for
 	for(int i=0; i<nb2; i++){
 		const v2r8 dt  = tsys - ptcl[i].tlast;
@@ -35,6 +36,7 @@ void Gravity::predict_all_rp(
 	}
 }
 
+#if 1
 void Gravity::calc_force_in_range(
 		const int    is,
 		const int    ie,
@@ -64,7 +66,7 @@ void Gravity::calc_force_in_range(
 			const v2r8 vyi = pred[i/2].vel[1];
 			const v2r8 vzi = pred[i/2].vel[2];
 			const v2r8 eps2(eps2_s);
-#pragma omp for // calculate partial force
+#pragma omp for nowait // calculate partial force
 			for(int j=0; j<nj; j+=2){
 				const v2r8 mj  = pred[j/2].mass;
 				const v2r8 xj  = pred[j/2].pos[0];
@@ -102,13 +104,15 @@ void Gravity::calc_force_in_range(
 			fobuf[tid][ii].save(
 					ax.hadd(), ay.hadd(), az.hadd(), 
 					jx.hadd(), jy.hadd(), jz.hadd());
-		}
+		} // for(i)
 	} // end omp paralle
 	// reduction & store
 #pragma omp parallel for
 	for(int i=is; i<ie; i+=2){
 		int ii = (i - is)/2;
 		v2r8 ax, ay, az, jx, jy, jz;
+#pragma loop noswp
+#pragma loop unroll 8
 		for(int ith=0; ith<nthreads; ith++){
 			// fsum.accumulate(fobuf[ith][ii]);
 			ax += fobuf[ith][ii].ax;
@@ -133,7 +137,6 @@ void Gravity::calc_force_in_range(
 		jz.storeh(&force[i+1].jrk.z);
 	}
 }
-#endif
 
 void Gravity::calc_potential_rp(
 		const int    nbody,
@@ -179,3 +182,4 @@ void Gravity::calc_potential_rp(
 		*(v4r8 *)(potbuf + i) = pot;
 	}
 }
+#endif

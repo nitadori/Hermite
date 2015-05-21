@@ -4,6 +4,7 @@
 #include <cassert>
 #include <algorithm>
 #include <sys/time.h>
+#include <unistd.h>
 
 #include <omp.h>
 // #include <mpi.h>
@@ -158,12 +159,25 @@ struct Profile{
 
 	static double wtime(){
 #ifdef __HPC_ACE__
-#  if 1
+#  if 0
 		return 1.e-6 * __gettod();
 #  else
+		static bool initcall = true;
+		static double inv_cpu_clock = 0.0;
+		if(initcall){
+			initcall = false;
+			unsigned long x0, x1;
+			double t0 = omp_get_wtime();
+			asm volatile ("rd %%tick, %0" : "=r" (x0));
+			sleep(1);
+			asm volatile ("rd %%tick, %0" : "=r" (x1));
+			double t1 = omp_get_wtime();
+			inv_cpu_clock = (t1-t0) / (x1-x0);
+			printf("HPC_ACE at %e Hz\n", 1.0 / inv_cpu_clock);
+		}
 		unsigned long x;
 		asm volatile ("rd %%tick, %0" : "=r" (x));
-		return (1.0/2.0e9) * (double)x;
+		return (1.0e-6 / 1650) * (double)x;
 #  endif
 #else
 # if 0
