@@ -43,6 +43,48 @@ void Gravity::predict_all_rp(
 		pred[i].mass = ptcl[i].mass;
 	}
 }
+void Gravity::predict_all_rp_fast_omp(
+		const int nbody, 
+		const double s_tsys, 
+		const GParticle * __restrict ptcl,
+		GPredictor      * __restrict pred)
+{
+	const v2r8 tsys(s_tsys);
+	const int nb2 = nbody / 2;
+#pragma loop noswp
+#pragma loop unroll 8
+#pragma omp for nowait
+	for(int i=0; i<nb2; i++){
+		const v2r8 dt  = tsys - ptcl[i].tlast;
+		const v2r8 dt2 = v2r8(1./2.) * dt;
+		const v2r8 dt3 = v2r8(1./3.) * dt;
+		const v2r8 dt4 = v2r8(1./4.) * dt;
+		const v2r8 dt5 = v2r8(1./5.) * dt;
+#pragma loop unroll
+		for(int k=0; k<3; k++){
+			pred[i].pos[k] = 
+				ptcl[i].pos[k] + dt * (
+					ptcl[i].vel[k] + dt2 * (
+						ptcl[i].acc[k] + dt3 * (
+							ptcl[i].jrk[k] + dt4 * (
+								ptcl[i].snp[k] + dt5 * (
+									ptcl[i].crk[k])))));
+			pred[i].vel[k] = 
+				ptcl[i].vel[k] + dt * (
+					ptcl[i].acc[k] + dt2 * (
+						ptcl[i].jrk[k] + dt3 * (
+							ptcl[i].snp[k] + dt4 * (
+								ptcl[i].crk[k]))));
+			pred[i].acc[k] = 
+				ptcl[i].acc[k] + dt * (
+						ptcl[i].jrk[k] + dt2 * (
+							ptcl[i].snp[k] + dt3 * (
+								ptcl[i].crk[k])));
+
+		}
+		pred[i].mass = ptcl[i].mass;
+	}
+}
 
 void Gravity::calc_force_in_range(
 		const int    is,
@@ -179,6 +221,184 @@ void Gravity::calc_force_in_range(
 		sy.storeh(&force[i+1].snp.y);
 		sz.storeh(&force[i+1].snp.z);
 	}
+}
+void Gravity::calc_force_in_range_fast_omp(
+		const int    is,
+		const int    ie,
+		const double eps2_s,
+		Force * __restrict force )
+{
+	static GForce fobuf[MAXTHREAD][NIMAX/2];
+
+	const int tid = omp_get_thread_num();
+	const int nthreads = omp_get_num_threads();
+
+	const int nj = nbody;
+	for(int i=is, ii=0; i<ie; i+=2, ii++){
+		v4r8 ax(0.0);
+		v4r8 ay(0.0);
+		v4r8 az(0.0);
+		v4r8 jx(0.0);
+		v4r8 jy(0.0);
+		v4r8 jz(0.0);
+		v4r8 sx(0.0);
+		v4r8 sy(0.0);
+		v4r8 sz(0.0);
+		const v2r8 xi  = pred[i/2].pos[0];
+		const v2r8 yi  = pred[i/2].pos[1];
+		const v2r8 zi  = pred[i/2].pos[2];
+		const v2r8 vxi = pred[i/2].vel[0];
+		const v2r8 vyi = pred[i/2].vel[1];
+		const v2r8 vzi = pred[i/2].vel[2];
+		const v2r8 axi = pred[i/2].acc[0];
+		const v2r8 ayi = pred[i/2].acc[1];
+		const v2r8 azi = pred[i/2].acc[2];
+		const v2r8 eps2(eps2_s);
+#pragma omp for nowait // calculate partial force
+		for(int j=0; j<nj; j+=2){
+			const v2r8 mj  = pred[j/2].mass;
+			const v2r8 xj  = pred[j/2].pos[0];
+			const v2r8 yj  = pred[j/2].pos[1];
+			const v2r8 zj  = pred[j/2].pos[2];
+			const v2r8 vxj = pred[j/2].vel[0];
+			const v2r8 vyj = pred[j/2].vel[1];
+			const v2r8 vzj = pred[j/2].vel[2];
+			const v2r8 axj = pred[j/2].acc[0];
+			const v2r8 ayj = pred[j/2].acc[1];
+			const v2r8 azj = pred[j/2].acc[2];
+
+			const v4r8 dx = v4r8_llhh(xj) - v4r8(xi);
+			const v4r8 dy = v4r8_llhh(yj) - v4r8(yi);
+			const v4r8 dz = v4r8_llhh(zj) - v4r8(zi);
+			const v4r8 dvx = v4r8_llhh(vxj) - v4r8(vxi);
+			const v4r8 dvy = v4r8_llhh(vyj) - v4r8(vyi);
+			const v4r8 dvz = v4r8_llhh(vzj) - v4r8(vzi);
+			const v4r8 dax = v4r8_llhh(axj) - v4r8(axi);
+			const v4r8 day = v4r8_llhh(ayj) - v4r8(ayi);
+			const v4r8 daz = v4r8_llhh(azj) - v4r8(azi);
+
+			const v4r8 r2    = ((v4r8(eps2) +dx*dx) + dy*dy) + dz*dz;
+			const v4r8 rv = (dx *dvx + dy *dvy) + dz *dvz;
+			const v4r8 v2 = (dvx*dvx + dvy*dvy) + dvz*dvz;
+			const v4r8 ra = (dx *dax + dy *day) + dz *daz;
+
+			const v4r8 rinv   = r2.rsqrta_x8();
+			const v4r8 rinv2  = rinv * rinv;
+			const v4r8 mrinv  = rinv * v4r8_llhh(mj);
+			const v4r8 mrinv3 = mrinv * rinv2;
+
+			const v4r8 alpha = rv * rinv2;
+			const v4r8 beta  = (v2 + ra) *rinv2 + alpha * alpha;
+			const v4r8 alpha3 = v4r8(-3.0) * alpha;
+			const v4r8 alpha6 = alpha3 + alpha3;
+			const v4r8 beta3  = v4r8(-3.0) * beta;
+
+			ax += mrinv3 * dx;
+			ay += mrinv3 * dy;
+			az += mrinv3 * dz;
+
+			const v4r8 tx = dvx + alpha3 * dx;
+			const v4r8 ty = dvy + alpha3 * dy;
+			const v4r8 tz = dvz + alpha3 * dz;
+
+			jx += mrinv3 * tx;
+			jy += mrinv3 * ty;
+			jz += mrinv3 * tz;
+
+			sx += mrinv3 * (dax + alpha6 * tx + beta3 * dx);
+			sy += mrinv3 * (day + alpha6 * ty + beta3 * dy);
+			sz += mrinv3 * (daz + alpha6 * tz + beta3 * dz);
+		} // for (j)
+		fobuf[tid][ii].save(
+				ax.hadd(), ay.hadd(), az.hadd(), 
+				jx.hadd(), jy.hadd(), jz.hadd(),
+				sx.hadd(), sy.hadd(), sz.hadd());
+	} // for(i)
+#pragma omp barrier
+	// reduction & store
+	if(0 == is && ie-is <= NACT_PARALLEL_THRESH){ // serial execution
+#pragma omp master
+		for(int i=is; i<ie; i+=2){
+			int ii = (i - is)/2;
+			v2r8 ax, ay, az, 
+				 jx, jy, jz,
+				 sx, sy, sz;
+#pragma loop noswp
+#pragma loop unroll 8
+			for(int ith=0; ith<nthreads; ith++){
+				// fsum.accumulate(fobuf[ith][ii]);
+				ax += fobuf[ith][ii].ax;
+				ay += fobuf[ith][ii].ay;
+				az += fobuf[ith][ii].az;
+				jx += fobuf[ith][ii].jx;
+				jy += fobuf[ith][ii].jy;
+				jz += fobuf[ith][ii].jz;
+				sx += fobuf[ith][ii].sx;
+				sy += fobuf[ith][ii].sy;
+				sz += fobuf[ith][ii].sz;
+			}
+			ax.storel(&force[i+0].acc.x);
+			ay.storel(&force[i+0].acc.y);
+			az.storel(&force[i+0].acc.z);
+			jx.storel(&force[i+0].jrk.x);
+			jy.storel(&force[i+0].jrk.y);
+			jz.storel(&force[i+0].jrk.z);
+			sx.storel(&force[i+0].snp.x);
+			sy.storel(&force[i+0].snp.y);
+			sz.storel(&force[i+0].snp.z);
+
+			ax.storeh(&force[i+1].acc.x);
+			ay.storeh(&force[i+1].acc.y);
+			az.storeh(&force[i+1].acc.z);
+			jx.storeh(&force[i+1].jrk.x);
+			jy.storeh(&force[i+1].jrk.y);
+			jz.storeh(&force[i+1].jrk.z);
+			sx.storeh(&force[i+1].snp.x);
+			sy.storeh(&force[i+1].snp.y);
+			sz.storeh(&force[i+1].snp.z);
+		}
+	}else{
+#pragma omp for
+		for(int i=is; i<ie; i+=2){
+			int ii = (i - is)/2;
+			v2r8 ax, ay, az, 
+				 jx, jy, jz,
+				 sx, sy, sz;
+#pragma loop noswp
+#pragma loop unroll 8
+			for(int ith=0; ith<nthreads; ith++){
+				// fsum.accumulate(fobuf[ith][ii]);
+				ax += fobuf[ith][ii].ax;
+				ay += fobuf[ith][ii].ay;
+				az += fobuf[ith][ii].az;
+				jx += fobuf[ith][ii].jx;
+				jy += fobuf[ith][ii].jy;
+				jz += fobuf[ith][ii].jz;
+				sx += fobuf[ith][ii].sx;
+				sy += fobuf[ith][ii].sy;
+				sz += fobuf[ith][ii].sz;
+			}
+			ax.storel(&force[i+0].acc.x);
+			ay.storel(&force[i+0].acc.y);
+			az.storel(&force[i+0].acc.z);
+			jx.storel(&force[i+0].jrk.x);
+			jy.storel(&force[i+0].jrk.y);
+			jz.storel(&force[i+0].jrk.z);
+			sx.storel(&force[i+0].snp.x);
+			sy.storel(&force[i+0].snp.y);
+			sz.storel(&force[i+0].snp.z);
+
+			ax.storeh(&force[i+1].acc.x);
+			ay.storeh(&force[i+1].acc.y);
+			az.storeh(&force[i+1].acc.z);
+			jx.storeh(&force[i+1].jrk.x);
+			jy.storeh(&force[i+1].jrk.y);
+			jz.storeh(&force[i+1].jrk.z);
+			sx.storeh(&force[i+1].snp.x);
+			sy.storeh(&force[i+1].snp.y);
+			sz.storeh(&force[i+1].snp.z);
+		}
+	} // if(nact...)
 }
 
 void Gravity::calc_potential_rp(

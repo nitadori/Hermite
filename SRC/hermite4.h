@@ -227,6 +227,7 @@ struct Particle{
 
 #ifdef HPC_ACE_GRAVITY
 static inline void swap(Particle &a, Particle &b){
+	asm("# fast SIMD swap");
 	typedef __builtin_v2r8 v2r8;
 	v2r8 *va = (v2r8 *)&a;
 	v2r8 *vb = (v2r8 *)&b;
@@ -242,6 +243,7 @@ static inline void swap(Particle &a, Particle &b){
 	const v2r8 va9 = va[9], vb9 = vb[9];
 	const v2r8 va10 = va[10], vb10 = vb[10];
 	const v2r8 va11 = va[11], vb11 = vb[11];
+#if 0
 	va[0] = vb0, vb[0] = va0;
 	va[1] = vb1, vb[1] = va1;
 	va[2] = vb2, vb[2] = va2;
@@ -254,6 +256,22 @@ static inline void swap(Particle &a, Particle &b){
 	va[9] = vb9, vb[9] = va9;
 	va[10] = vb10, vb[10] = va10;
 	va[11] = vb11, vb[11] = va11;
+#else
+#define STORE(ptr, val) __builtin_fj_store_v2r8((double *)(ptr), val)
+	STORE(va+0 , vb0 ), STORE(vb+0 , va0 );
+	STORE(va+1 , vb1 ), STORE(vb+1 , va1 );
+	STORE(va+2 , vb2 ), STORE(vb+2 , va2 );
+	STORE(va+3 , vb3 ), STORE(vb+3 , va3 );
+	STORE(va+4 , vb4 ), STORE(vb+4 , va4 );
+	STORE(va+5 , vb5 ), STORE(vb+5 , va5 );
+	STORE(va+6 , vb6 ), STORE(vb+6 , va6 );
+	STORE(va+7 , vb7 ), STORE(vb+7 , va7 );
+	STORE(va+8 , vb8 ), STORE(vb+8 , va8 );
+	STORE(va+9 , vb9 ), STORE(vb+9 , va9 );
+	STORE(va+10, vb10), STORE(vb+10, va10);
+	STORE(va+11, vb11), STORE(vb+11, va11);
+#undef STORE
+#endif
 }
 #endif
 

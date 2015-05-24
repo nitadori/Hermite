@@ -43,7 +43,7 @@ hpc-6th: hpc-6th.s hermite6-k.s parameter.o
 #	cp $@ ../RUN
 
 hpc-6th.s: compile.cpp nbodysystem.h hermite6.h hermite6-k.h TOUCH
-	$(CXX) -S $(CXXFLAGS) -DSIXTH -DHPC_ACE_GRAVITY $< -o $@
+	$(CXX) -S $(CXXFLAGS) -Knoswp,nounroll -DSIXTH -DHPC_ACE_GRAVITY -DFAST_OMP_SYNC $< -o $@
 
 hermite6-k.s: hermite6-k.cpp hermite6-k.h hermite6.h TOUCH
 	$(CXX) -S $(CXXFLAGS) -DSIXTH -DHPC_ACE_GRAVITY $< -o $@
@@ -53,7 +53,7 @@ hpc-8th: hpc-8th.s hermite8-k.s parameter.o
 #	cp $@ ../RUN
 
 hpc-8th.s: compile.cpp nbodysystem.h hermite8.h hermite8-k.h TOUCH
-	$(CXX) -S $(CXXFLAGS) -DEIGHTH -DHPC_ACE_GRAVITY $< -o $@
+	$(CXX) -S $(CXXFLAGS) -Knoswp,nounroll -DEIGHTH -DHPC_ACE_GRAVITY -DFAST_OMP_SYNC $< -o $@
 
 hermite8-k.s: hermite8-k.cpp hermite8-k.h hermite8.h TOUCH
 	$(CXX) -S $(CXXFLAGS) -DEIGHTH -DHPC_ACE_GRAVITY $< -o $@

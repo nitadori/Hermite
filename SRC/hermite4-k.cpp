@@ -239,6 +239,7 @@ void Gravity::calc_force_in_range_fast_omp(
 #pragma omp barrier
 	// reduction & store
 	if(0 == is && ie-is <= NACT_PARALLEL_THRESH){ // serial execution
+#pragma omp master
 		for(int i=is; i<ie; i+=2){
 			int ii = (i - is)/2;
 			v2r8 ax, ay, az, jx, jy, jz;

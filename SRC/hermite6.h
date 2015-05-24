@@ -215,6 +215,45 @@ struct Particle{
 }
 __attribute__((aligned(32)));
 
+#ifdef HPC_ACE_GRAVITY
+static inline void swap(Particle &a, Particle &b){
+	asm("# fast SIMD swap");
+	typedef __builtin_v2r8 v2r8;
+	v2r8 *va = (v2r8 *)&a;
+	v2r8 *vb = (v2r8 *)&b;
+	const v2r8 va0 = va[0], vb0 = vb[0];
+	const v2r8 va1 = va[1], vb1 = vb[1];
+	const v2r8 va2 = va[2], vb2 = vb[2];
+	const v2r8 va3 = va[3], vb3 = vb[3];
+	const v2r8 va4 = va[4], vb4 = vb[4];
+	const v2r8 va5 = va[5], vb5 = vb[5];
+	const v2r8 va6 = va[6], vb6 = vb[6];
+	const v2r8 va7 = va[7], vb7 = vb[7];
+	const v2r8 va8 = va[8], vb8 = vb[8];
+	const v2r8 va9 = va[9], vb9 = vb[9];
+	const v2r8 va10 = va[10], vb10 = vb[10];
+	const v2r8 va11 = va[11], vb11 = vb[11];
+	const v2r8 va12 = va[12], vb12 = vb[12];
+	const v2r8 va13 = va[13], vb13 = vb[13];
+#define STORE(ptr, val) __builtin_fj_store_v2r8((double *)(ptr), val)
+	STORE(va+0 , vb0 ), STORE(vb+0 , va0 );
+	STORE(va+1 , vb1 ), STORE(vb+1 , va1 );
+	STORE(va+2 , vb2 ), STORE(vb+2 , va2 );
+	STORE(va+3 , vb3 ), STORE(vb+3 , va3 );
+	STORE(va+4 , vb4 ), STORE(vb+4 , va4 );
+	STORE(va+5 , vb5 ), STORE(vb+5 , va5 );
+	STORE(va+6 , vb6 ), STORE(vb+6 , va6 );
+	STORE(va+7 , vb7 ), STORE(vb+7 , va7 );
+	STORE(va+8 , vb8 ), STORE(vb+8 , va8 );
+	STORE(va+9 , vb9 ), STORE(vb+9 , va9 );
+	STORE(va+10, vb10), STORE(vb+10, va10);
+	STORE(va+11, vb11), STORE(vb+11, va11);
+	STORE(va+12, vb12), STORE(vb+12, va12);
+	STORE(va+13, vb13), STORE(vb+13, va13);
+#undef STORE
+}
+#endif
+
 #ifdef AVX_GRAVITY
 #include "hermite6-avx.h"
 #elif defined HPC_ACE_GRAVITY

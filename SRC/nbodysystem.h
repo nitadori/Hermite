@@ -529,6 +529,8 @@ struct NbodySystem{
 				const VParticle pj(&ptcl[j]);
 				pi.store(&ptcl[j]);
 				pj.store(&ptcl[i]);
+#elif defined HPC_ACE_GRAVITY
+				swap(ptcl[i], ptcl[j]);
 #else
 				std::swap(ptcl[i], ptcl[j]);
 #endif

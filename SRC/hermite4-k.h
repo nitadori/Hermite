@@ -11,7 +11,7 @@ struct Gravity{
 	enum{
 		NIMAX = 1024,
 		MAXTHREAD = 16,
-		NACT_PARALLEL_THRESH = 8,
+		NACT_PARALLEL_THRESH = 4,
 	};
 
 	struct GParticle{
