@@ -1,6 +1,10 @@
-exe=gpu-8th
-for snap in pl1k pl2k pl4k pl8k pl16k pl32k pl64k
+for order in 4th 6th 8th
 do
-    cp ${snap}.dat inp.dat
-    ./${exe} < inp.8th | grep '##' >> ${exe}.log
+  exe=hpc-${order}
+  for snap in pl1k pl2k pl4k pl8k pl16k pl32k pl64k
+  do  
+      rm -f inp.dat
+      ln -s  ${snap}.dat inp.dat
+      ./${exe} < inp.${order} | grep '##' >> ${exe}.log
+  done
 done
