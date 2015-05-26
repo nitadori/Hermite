@@ -572,6 +572,7 @@ breakpoint:
 				gravity->set_jp(i, ptcl[i]);
 			}
 		}
+		exit(0);
 		prof.beg(Profile::PREDICT);
 		gravity->predict_all(tsys);
 		prof.end(Profile::PREDICT);

@@ -18,6 +18,9 @@ typedef double v4df __attribute__((vector_size(32)));
 #warning HPC-ACE is available
 #include <fjcex.h>
 #endif
+#ifdef __HPC_ACE2__
+#warning HPC-ACE2 is available
+#endif
 #ifdef __MIC__
 #warning MIC is available
 #endif
@@ -45,6 +48,14 @@ T *allocate(size_t num_elem){
 #  include "hermite8dd.h"
 #else
 #  error
+#endif
+
+#ifdef MX_GRAVITY
+#  define MX_SIMD4 v4r8::simd_mode_4();
+#  define MX_SIMD2 v4r8::simd_mode_2();
+#else
+#  define MX_SIMD4
+#  define MX_SIMD2
 #endif
 
 #include "nbodysystem.h"
