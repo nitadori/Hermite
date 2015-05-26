@@ -13,6 +13,8 @@ void Gravity::predict_all_rp_fast_omp(
 
 	const v4r8 tsys(s_tsys);
 
+#pragma loop noswp
+#pragma loop unroll 8
 #pragma omp for nowait
 	for(int i=0; i<nbody; i++){
 		const v4r8 dt = tsys - v4r8::broadcastload(&ptcl[i].tlast);
@@ -44,7 +46,8 @@ void Gravity::calc_force_in_range_fast_omp(
 		Force * __restrict force )
 {
 	v4r8::simd_mode_4();
-	GForce fobuf[MAXTHREAD][NIMAX/4 + 1];
+	// asm volatile("ssm 1"); // WTF!!
+	static GForce fobuf[MAXTHREAD][NIMAX/4 + 1];
 	const int tid = omp_get_thread_num();
 	const int nthreads = omp_get_num_threads();
 
