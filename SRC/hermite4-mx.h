@@ -10,6 +10,7 @@ struct Gravity{
 	enum{
 		NIMAX = 1024,
 		MAXTHREAD = 16,
+		NACT_PARALLEL_THRESH = 4,
 	};
 
 	struct GParticle{
@@ -33,6 +34,13 @@ struct Gravity{
 	struct GForce{
 		v4r8 ax, ay, az;
 		v4r8 jx, jy, jz;
+
+		GForce(){}
+		GForce(	
+				const v4r8 _ax, const v4r8 _ay, const v4r8 _az,
+				const v4r8 _jx, const v4r8 _jy, const v4r8 _jz)
+			: ax(_ax), ay(_ay), az(_az), jx(_jx), jy(_jy), jz(_jz) {}
+
 
 		void clear(){
 			ax = ay = az = v4r8(0.0);
@@ -61,6 +69,7 @@ struct Gravity{
 			jz += rjz;
 		}
 
+		__attribute__((always_inline))
 		void store_4_forces(Force * __restrict fout){
 			const v4_mask v3mask(1,1,1,0);
 			v4r8 a0 = ax;
@@ -197,7 +206,7 @@ struct Gravity{
 			const double deps2,
 			double * __restrict potbuf)
 	{
-		puts("MX calc potential");
+		// puts("MX calc potential");
 		v4r8 *xmbuf = allocate<v4r8, 128>(nbody+1);
 		calc_potential_rp(nbody, deps2, ptcl, xmbuf, potbuf);
 		free(xmbuf);
