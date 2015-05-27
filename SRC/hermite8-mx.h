@@ -141,7 +141,7 @@ struct Gravity{
 			const Particle * __restrict p,
 			GParticle      * __restrict ptcl)
 	{
-#if 0
+#if 1
 		v4r8::simd_mode_4();
 
 		v4r8 mt   = v4r8::load(&p->mass);
