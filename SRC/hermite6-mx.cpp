@@ -1,7 +1,7 @@
 #include "allocate.h"
 #include "vector3.h"
-#include "hermite4.h"
-#include "hermite4-mx.h"
+#include "hermite6.h"
+#include "hermite6-mx.h"
 
 void Gravity::predict_all_rp_fast_omp(
 		const int nbody, 
@@ -18,24 +18,37 @@ void Gravity::predict_all_rp_fast_omp(
 #pragma omp for nowait
 	for(int i=0; i<nbody; i++){
 		const v4r8 dt = tsys - v4r8::broadcastload(&ptcl[i].tlast);
-		const v4r8 c(1./2., 1./3., 1./2., 1./3.);
-		const v4r8 dt2 = dt * v4r8_0022(c);
-		const v4r8 dt3 = dt * v4r8_1133(c);
+		const v4r8 c23(1./2., 1./3., 1./2., 1./3.);
+		const v4r8 c45(1./4., 1./5., 1./4., 1./5.);
+
+		const v4r8 dt2 = dt * v4r8_0022(c23);
+		const v4r8 dt3 = dt * v4r8_1133(c23);
+#if 1
+		const v4r8 dt4 = dt * v4r8_0022(c45);
+		const v4r8 dt5 = dt * v4r8_1133(c45);
+#else
+		const v4r8 dt4 = dt * v4r8(1./4.);
+		const v4r8 dt5 = dt * v4r8(1./5.);
+#endif
 
 		v4r8 pos  = v4r8::load(ptcl[i].pos);
 		v4r8 vel  = v4r8::load(ptcl[i].vel);
 		v4r8 acc  = v4r8::load(ptcl[i].acc);
 		v4r8 jrk  = v4r8::load(ptcl[i].jrk);
+		v4r8 snp  = v4r8::load(ptcl[i].snp);
+		v4r8 crk  = v4r8::load(ptcl[i].crk);
 		v4r8 mass = v4r8::load(&ptcl[i].mass);
 
-		pos = pos + dt*(vel + dt2*(acc + dt3*jrk));
-		vel = vel + dt*(acc + dt2*(jrk));
+		pos = pos + dt*(vel + dt2*(acc + dt3*(jrk + dt4*(snp + dt5*(crk)))));
+		vel = vel + dt*(acc + dt2*(jrk + dt3*(snp + dt4*(crk))));
+		acc = acc + dt*(jrk + dt2*(snp + dt3*(crk)));
 		pos = pos.ecsl(3).ecsl(mass, 1);
 
+		const v4_mask v3mask(1,1,1,0);
 		pos.store(pred[i].pos);
-		vel.store(pred[i].vel);
+		vel.store(pred[i].vel, v3mask);
+		acc.store(pred[i].acc, v3mask);
 	}
-
 	// v4r8::simd_mode_2();
 }
 
@@ -46,7 +59,6 @@ void Gravity::calc_force_in_range_fast_omp(
 		Force * __restrict force )
 {
 	v4r8::simd_mode_4();
-	// asm volatile("ssm 1"); // WTF!!
 	static GForce fobuf[MAXTHREAD][NIMAX/4 + 1];
 	const int tid = omp_get_thread_num();
 	const int nthreads = omp_get_num_threads();
@@ -60,6 +72,9 @@ void Gravity::calc_force_in_range_fast_omp(
 		v4r8 jx(0.0);
 		v4r8 jy(0.0);
 		v4r8 jz(0.0);
+		v4r8 sx(0.0);
+		v4r8 sy(0.0);
+		v4r8 sz(0.0);
 
 		v4r8 xi = v4r8::load((double *)&pred[i+0].pos);
 		v4r8 yi = v4r8::load((double *)&pred[i+1].pos);
@@ -71,8 +86,14 @@ void Gravity::calc_force_in_range_fast_omp(
 		v4r8 vzi = v4r8::load((double *)&pred[i+2].vel);
 		v4r8 vwi = v4r8::load((double *)&pred[i+3].vel);
 
+		v4r8 axi = v4r8::load((double *)&pred[i+0].acc);
+		v4r8 ayi = v4r8::load((double *)&pred[i+1].acc);
+		v4r8 azi = v4r8::load((double *)&pred[i+2].acc);
+		v4r8 awi = v4r8::load((double *)&pred[i+3].acc);
+
 		v4r8::transpose(xi, yi, zi, wi);
 		v4r8::transpose(vxi, vyi, vzi, vwi);
+		v4r8::transpose(axi, ayi, azi, awi);
 
 		v4r8 eps2(eps2_s);
 
@@ -85,6 +106,9 @@ void Gravity::calc_force_in_range_fast_omp(
 			const v4r8 vxj = v4r8::broadcastload(&pred[j].vel[0]);
 			const v4r8 vyj = v4r8::broadcastload(&pred[j].vel[1]);
 			const v4r8 vzj = v4r8::broadcastload(&pred[j].vel[2]);
+			const v4r8 axj = v4r8::broadcastload(&pred[j].acc[0]);
+			const v4r8 ayj = v4r8::broadcastload(&pred[j].acc[1]);
+			const v4r8 azj = v4r8::broadcastload(&pred[j].acc[2]);
 
 			const v4r8 dx = xj - xi;
 			const v4r8 dy = yj - yi;
@@ -92,31 +116,48 @@ void Gravity::calc_force_in_range_fast_omp(
 			const v4r8 dvx = vxj - vxi;
 			const v4r8 dvy = vyj - vyi;
 			const v4r8 dvz = vzj - vzi;
+			const v4r8 dax = axj - axi;
+			const v4r8 day = ayj - ayi;
+			const v4r8 daz = azj - azi;
 
 			const v4r8 dr2 = ((eps2 + dx*dx) + dy*dy) + dz*dz;
 			const v4r8 drdv = (dx*dvx + dy*dvy) + dz*dvz;
+			const v4r8 drda = (dx *dax + dy *day) + dz *daz;
+			const v4r8 dvdv = (dvx*dvx + dvy*dvy) + dvz*dvz;
 
 			const v4r8 rinv1 = dr2.rsqrta_x8();
 			const v4r8 rinv2 = rinv1 * rinv1;
 			const v4r8 mrinv3 = mj * rinv1 * rinv2;
 
-			const v4r8 alpha = v4r8(-3.0) * (drdv * rinv2);
+			v4r8 alpha = drdv * rinv2;
+			v4r8 beta  = (dvdv + drda) * rinv2 + alpha * alpha;
 
 			ax += mrinv3 * dx;
 			ay += mrinv3 * dy;
 			az += mrinv3 * dz;
-			jx += mrinv3 * (dvx + alpha * dx);
-			jy += mrinv3 * (dvy + alpha * dy);
-			jz += mrinv3 * (dvz + alpha * dz);
+
+			alpha *= v4r8(-3.0);
+			v4r8 tx = dvx + alpha * dx;
+			v4r8 ty = dvy + alpha * dy;
+			v4r8 tz = dvz + alpha * dz;
+			jx += mrinv3 * tx;
+			jy += mrinv3 * ty;
+			jz += mrinv3 * tz;
+
+			alpha += alpha;
+			beta  *= v4r8(-3.0);
+			sx += mrinv3 * ((dax + alpha * tx) + beta * dx);
+			sy += mrinv3 * ((day + alpha * ty) + beta * dy);
+			sz += mrinv3 * ((daz + alpha * tz) + beta * dz);
 		}
-		fobuf[tid][ii].save(ax, ay, az, jx, jy, jz);
+		fobuf[tid][ii].save(ax, ay, az, jx, jy, jz, sx, sy, sz);
 	} // for(i)
 #pragma omp barrier
 	if(1){
 #pragma omp for
 		for(int i=is; i<ie; i+=4){
 			const int ii = (i-is)/4;
-			v4r8 ax, ay, az, jx, jy, jz;
+			v4r8 ax, ay, az, jx, jy, jz, sx, sy, sz;
 #pragma loop noswp
 #pragma loop unroll 8
 			for(int ith=0; ith<nthreads; ith++){
@@ -126,8 +167,11 @@ void Gravity::calc_force_in_range_fast_omp(
 				jx += fobuf[ith][ii].jx;
 				jy += fobuf[ith][ii].jy;
 				jz += fobuf[ith][ii].jz;
+				sx += fobuf[ith][ii].sx;
+				sy += fobuf[ith][ii].sy;
+				sz += fobuf[ith][ii].sz;
 			}
-			GForce(ax, ay, az, jx, jy, jz).store_4_forces(force + i);
+			GForce(ax, ay, az, jx, jy, jz, sx, sy, sz).store_4_forces(force + i);
 		} // here comes a barrier
 	}
 }

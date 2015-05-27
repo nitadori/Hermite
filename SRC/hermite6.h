@@ -258,6 +258,8 @@ static inline void swap(Particle &a, Particle &b){
 #include "hermite6-avx.h"
 #elif defined HPC_ACE_GRAVITY
 #include "hermite6-k.h"
+#elif defined MX_GRAVITY
+#include "hermite6-mx.h"
 #elif defined MIC_GRAVITY
 #include "hermite6-mic.h"
 #elif defined CUDA_TITAN

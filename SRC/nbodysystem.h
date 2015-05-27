@@ -572,7 +572,6 @@ breakpoint:
 				gravity->set_jp(i, ptcl[i]);
 			}
 		}
-		exit(0);
 		prof.beg(Profile::PREDICT);
 		gravity->predict_all(tsys);
 		prof.end(Profile::PREDICT);
@@ -586,6 +585,17 @@ breakpoint:
 			const double Gflops = (((1.0e-9 * nbody) * nbody) * Particle::flops) / (t1-t0);
 			printf("## Init N square : %f Gflops\n", Gflops);
 		}
+#if 0
+		for(int i=n-10; i<n; i++){
+			dvec3 acc = force[i].acc;
+			dvec3 jrk = force[i].jrk;
+			printf("%d : (%e, %e, %e) (%e, %e, %e)\n", 
+					i, 
+					acc.x, acc.y, acc.z,
+					jrk.x, jrk.y, jrk.z);
+		}
+		exit(0);
+#endif
 		for(int i=0; i<n; i++){
 			ptcl[i].assign_force(force[i]);
 			ptcl[i].init_dt(eta_s, dtmax);

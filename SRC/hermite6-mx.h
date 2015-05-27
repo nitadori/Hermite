@@ -1,9 +1,6 @@
 #pragma once
-// #include<cstdlib>
 #include<cassert>
-
 #include <omp.h>
-
 #include "mx-v4r8.h"
 
 struct Gravity{
@@ -19,54 +16,47 @@ struct Gravity{
 		double vel[3];
 		double tlast;
 		double acc[3];
-		double apad;
 		double jrk[3];
-		double jpad;   // 4 YMM
+		double snp[3];
+		double crk[3]; // 5 YMM
 	};
 
 	struct GPredictor{
 		double pos[3];
 		double mass;
 		double vel[3];
-		double pad;    // 2 YMM
+		double acc[3]; // 5 XMM
 	};
 
 	struct GForce{
 		v4r8 ax, ay, az;
 		v4r8 jx, jy, jz;
+		v4r8 sx, sy, sz;
 
 		GForce(){}
 		GForce(	
 				const v4r8 _ax, const v4r8 _ay, const v4r8 _az,
-				const v4r8 _jx, const v4r8 _jy, const v4r8 _jz)
-			: ax(_ax), ay(_ay), az(_az), jx(_jx), jy(_jy), jz(_jz) {}
+				const v4r8 _jx, const v4r8 _jy, const v4r8 _jz,
+				const v4r8 _sx, const v4r8 _sy, const v4r8 _sz)
+			: ax(_ax), ay(_ay), az(_az), 
+			  jx(_jx), jy(_jy), jz(_jz),
+			  sx(_sx), sy(_sy), sz(_sz) {}
 
 
 		void clear(){
 			ax = ay = az = v4r8(0.0);
 			jx = jy = jz = v4r8(0.0);
+			sx = sy = sz = v4r8(0.0);
 		}
 
 		void save(
 				const v4r8 _ax, const v4r8 _ay, const v4r8 _az,
-				const v4r8 _jx, const v4r8 _jy, const v4r8 _jz)
+				const v4r8 _jx, const v4r8 _jy, const v4r8 _jz,
+				const v4r8 _sx, const v4r8 _sy, const v4r8 _sz)
 		{
 			ax = _ax; ay = _ay; az = _az;
 			jx = _jx; jy = _jy; jz = _jz;
-		}
-		void accumulate(const GForce &rhs){
-			const v4r8 rax = rhs.ax;
-			const v4r8 ray = rhs.ay;
-			const v4r8 raz = rhs.az;
-			const v4r8 rjx = rhs.jx;
-			const v4r8 rjy = rhs.jy;
-			const v4r8 rjz = rhs.jz;
-			ax += rax;
-			ay += ray;
-			az += raz;
-			jx += rjx;
-			jy += rjy;
-			jz += rjz;
+			sx = _sx; sy = _sy; sz = _sz;
 		}
 
 		__attribute__((always_inline))
@@ -82,17 +72,30 @@ struct Gravity{
 			v4r8 j2 = jz;
 			v4r8 j3;
 
+			v4r8 s0 = sx;
+			v4r8 s1 = sy;
+			v4r8 s2 = sz;
+			v4r8 s3;
+
 			v4r8::transpose(a0, a1, a2, a3);
 			v4r8::transpose(j0, j1, j2, j3);
+			v4r8::transpose(s0, s1, s2, s3);
 
 			a0.store(&fout[0].acc.x, v3mask);
 			j0.store(&fout[0].jrk.x, v3mask);
+			s0.store(&fout[0].snp.x, v3mask);
+
 			a1.store(&fout[1].acc.x, v3mask);
 			j1.store(&fout[1].jrk.x, v3mask);
+			s1.store(&fout[1].snp.x, v3mask);
+
 			a2.store(&fout[2].acc.x, v3mask);
 			j2.store(&fout[2].jrk.x, v3mask);
+			s2.store(&fout[2].snp.x, v3mask);
+
 			a3.store(&fout[3].acc.x, v3mask);
 			j3.store(&fout[3].jrk.x, v3mask);
+			s3.store(&fout[3].snp.x, v3mask);
 		}
 	};
 
@@ -110,8 +113,8 @@ struct Gravity{
 		}
 	}
 	~Gravity(){
-		deallocate<GParticle,  256> (nbody);
-		deallocate<GPredictor, 256> (nbody);
+		deallocate<GParticle,  256> (ptcl);
+		deallocate<GPredictor, 256> (pred);
 	}
 
 	static void set_jp_rp(
@@ -122,20 +125,23 @@ struct Gravity{
 #if 1
 		v4r8::simd_mode_4();
 
-		v4r8 pos   = v4r8::load(&p->pos.x);
-		v4r8 vel   = v4r8::load(&p->vel.x);
-		v4r8 acc   = v4r8::load(&p->acc.x);
-		v4r8 jrk   = v4r8::load(&p->jrk.x);
-		v4r8 mass  = v4r8::load(&p->mass );
-		v4r8 tlast = v4r8::load(&p->tlast);
+		v4r8 mt   = v4r8::load(&p->mass);
+		v4r8 posm = v4r8::load(&p->dt);
+		v4r8 velt = v4r8::load(&p->pos.z);
+		v4r8 ym2  = v4r8::load(&p->acc.x);
+		v4r8 ym3  = v4r8::load(&p->jrk.y);
+		v4r8 ym4  = v4r8::load(&p->snp.z);
 
-		pos = pos.ecsl(3).ecsl(mass,  1);
-		vel = vel.ecsl(3).ecsl(tlast, 1);
+		posm = posm.ecsl(mt, 1);
+		velt = velt.ecsl(mt.ecsl(1), 1);
 
-		pos.store(ptcl[addr].pos);
-		vel.store(ptcl[addr].vel);
-		acc.store(ptcl[addr].acc);
-		jrk.store(ptcl[addr].jrk);
+		double *ptr = ptcl[addr].pos;
+		posm.store(ptr +  0);
+		velt.store(ptr +  4);
+		ym2 .store(ptr +  8);
+		ym3 .store(ptr + 12);
+		ym4 .store(ptr + 16);
+		// ptcl[addr].tlast = p->tlast;
 #else
 		ptcl[addr].pos[0] = p->pos.x;
 		ptcl[addr].pos[1] = p->pos.y;
@@ -151,6 +157,12 @@ struct Gravity{
 		ptcl[addr].jrk[0] = p->jrk.x;
 		ptcl[addr].jrk[1] = p->jrk.y;
 		ptcl[addr].jrk[2] = p->jrk.z;
+		ptcl[addr].snp[0] = p->snp.x;
+		ptcl[addr].snp[1] = p->snp.y;
+		ptcl[addr].snp[2] = p->snp.z;
+		ptcl[addr].crk[0] = p->crk.x;
+		ptcl[addr].crk[1] = p->crk.y;
+		ptcl[addr].crk[2] = p->crk.z;
 #endif
 	}
 	void set_jp(const int addr, const Particle &p){
@@ -212,4 +224,6 @@ struct Gravity{
 		calc_potential_rp(nbody, deps2, ptcl, xmbuf, potbuf);
 		free(xmbuf);
 	}
+
 };
+
