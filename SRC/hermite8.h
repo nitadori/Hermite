@@ -305,6 +305,8 @@ static inline void swap(Particle &a, Particle &b){
 #include "hermite8-avx.h"
 #elif defined HPC_ACE_GRAVITY
 #include "hermite8-k.h"
+#elif defined MX_GRAVITY
+#include "hermite8-mx.h"
 #elif defined MIC_GRAVITY
 #include "hermite8-mic.h"
 #elif defined CUDA_TITAN
