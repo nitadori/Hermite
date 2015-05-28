@@ -186,7 +186,6 @@ void Gravity::calc_potential_rp(
 // #pragma omp parallel
 	{
 		v4r8::simd_mode_4();
-		// asm volatile("ssm 1"); // WTF!!
 		//setup cache
 #pragma omp for
 		for(int i=0; i<nbody; i++){

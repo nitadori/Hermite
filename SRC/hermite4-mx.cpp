@@ -46,7 +46,6 @@ void Gravity::calc_force_in_range_fast_omp(
 		Force * __restrict force )
 {
 	v4r8::simd_mode_4();
-	// asm volatile("ssm 1"); // WTF!!
 	static GForce fobuf[MAXTHREAD][NIMAX/4 + 1];
 	const int tid = omp_get_thread_num();
 	const int nthreads = omp_get_num_threads();
