@@ -760,15 +760,24 @@ breakpoint:
 #ifdef FAST_OMP_SYNC
 	void integrate_one_dtmax_fast_omp(){
 		const double tt = tsys + dtmax;
+		double sh_tnext = dtbuf[0];
+		double sh_dtlim = calc_dtlim(sh_tnext);
+		int    sh_nact  = count_nact(sh_tnext);
 #     pragma omp parallel
 		{
 			double tsys_loc = this->tsys;
 			while(tsys_loc < tt){
 				prof.beg_master(Profile::SCAN, true);
 				// const double tnext = ptcl[0].tlast + ptcl[0].dt;
+#if 0
 				const double tnext = dtbuf[0];
 				const double dtlim = calc_dtlim(tnext);
 				const int    nact  = count_nact(tnext);
+#else
+				const double tnext = sh_tnext;
+				const double dtlim = sh_dtlim;
+				const int    nact  = sh_nact;
+#endif
 				prof.end_master(Profile::SCAN);
 
 				prof.beg_master(Profile::PREDICT, true);
@@ -833,6 +842,10 @@ breakpoint:
 						sort_ptcl_dtcache(nact, dtlim);
 						this->num_step += nact;
 						this->num_bstep++;
+
+						sh_tnext = dtbuf[0];
+						sh_dtlim = calc_dtlim(sh_tnext);
+						sh_nact  = count_nact(sh_tnext);
 						prof.end(Profile::SORT);
 					}
 #                 pragma omp barrier
@@ -855,6 +868,10 @@ breakpoint:
 						sort_ptcl_dtcache(nact, dtlim);
 						this->num_step += nact;
 						this->num_bstep++;
+
+						sh_tnext = dtbuf[0];
+						sh_dtlim = calc_dtlim(sh_tnext);
+						sh_nact  = count_nact(sh_tnext);
 						prof.end(Profile::SORT);
 						prof.beg(Profile::SET_JP, true);
 						for(int i=0; i<nact; i++){

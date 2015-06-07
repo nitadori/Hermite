@@ -420,19 +420,20 @@ struct Gravity{
 				ay += mrinv3 * dy;
 				az += mrinv3 * dz;
 
-				alpha *= (v4df){-3.0, -3.0, -3.0, -3.0};
-				v4df tx = dvx + alpha * dx;
-				v4df ty = dvy + alpha * dy;
-				v4df tz = dvz + alpha * dz;
+				alpha *= (v4df){3.0, 3.0, 3.0, 3.0};
+				v4df tx = dvx - alpha * dx;
+				v4df ty = dvy - alpha * dy;
+				v4df tz = dvz - alpha * dz;
 				jx += mrinv3 * tx;
 				jy += mrinv3 * ty;
 				jz += mrinv3 * tz;
 
-				alpha *= (v4df){2.0, 2.0, 2.0, 2.0};
-				beta  *= (v4df){-3.0, -3.0, -3.0, -3.0};
-				sx += mrinv3 * (dax + alpha * tx + beta * dx);
-				sy += mrinv3 * (day + alpha * ty + beta * dy);
-				sz += mrinv3 * (daz + alpha * tz + beta * dz);
+				// alpha *= (v4df){2.0, 2.0, 2.0, 2.0};
+				alpha += alpha;
+				beta  *= (v4df){3.0, 3.0, 3.0, 3.0};
+				sx += mrinv3 * ((dax - alpha * tx) - beta * dx);
+				sy += mrinv3 * ((day - alpha * ty) - beta * dy);
+				sz += mrinv3 * ((daz - alpha * tz) - beta * dz);
 			}
 			fobuf[ii].save(ax, ay, az, jx, jy, jz, sx, sy, sz);
 		} // for(i)

@@ -510,19 +510,21 @@ struct Gravity{
 
 				const v4df rinv1 = v4df_rsqrt(dr2);
 				const v4df rinv2 = rinv1 * rinv1;
-				const v4df mrinv3 = mj * rinv1 * rinv2;
+				const v4df mrinv3 = (mj * rinv1) * rinv2;
 
 				const v4df three = {3.0, 3.0, 3.0, 3.0};
 				const v4df four  = {4.0, 4.0, 4.0, 4.0};
+				// const v4df frac43  = {4./3., 4./3., 4./3., 4./3.};
 				v4df alpha = drdv * rinv2;
 				v4df beta  = (dvdv + drda) * rinv2 + alpha*alpha;
-				v4df gamma = (three*dvda + drdj) * rinv2
-					+ alpha * (three*beta - four*alpha*alpha);
+				v4df gamma = (three*dvda + drdj) * rinv2 + alpha * (three*beta - four*(alpha*alpha));
+				// v4df gamma = (three*dvda + drdj) * rinv2 + (three * alpha) * (beta - frac43*(alpha*alpha));
 
 				ax += mrinv3 * dx;
 				ay += mrinv3 * dy;
 				az += mrinv3 * dz;
 
+#if 0
 				alpha *= (v4df){-3.0, -3.0, -3.0, -3.0};
 				v4df tx = dvx + alpha * dx;
 				v4df ty = dvy + alpha * dy;
@@ -546,6 +548,33 @@ struct Gravity{
 				cx += mrinv3 * (djx + alpha * ux + beta * tx + gamma * dx);
 				cy += mrinv3 * (djy + alpha * uy + beta * ty + gamma * dy);
 				cz += mrinv3 * (djz + alpha * uz + beta * tz + gamma * dz);
+#else
+				alpha *= three;
+				v4df tx = dvx - alpha * dx;
+				v4df ty = dvy - alpha * dy;
+				v4df tz = dvz - alpha * dz;
+				jx += mrinv3 * tx;
+				jy += mrinv3 * ty;
+				jz += mrinv3 * tz;
+
+				// alpha *= (v4df){2.0, 2.0, 2.0, 2.0};     // -6.0
+				v4df alpha2 = alpha + alpha;
+				beta  *= three; // -3.0
+				v4df ux = (dax - alpha2 * tx) - beta * dx;
+				v4df uy = (day - alpha2 * ty) - beta * dy;
+				v4df uz = (daz - alpha2 * tz) - beta * dz;
+				sx += mrinv3 * ux;
+				sy += mrinv3 * uy;
+				sz += mrinv3 * uz;
+
+				// alpha *= (v4df){1.5, 1.5, 1.5, 1.5};     // -9.0
+				v4df alpha3 = alpha2 + alpha;
+				beta  *= three;     // -9.0
+				gamma *= three; // -3.0
+				cx += mrinv3 * (((djx - alpha3 * ux) - beta * tx) - gamma * dx);
+				cy += mrinv3 * (((djy - alpha3 * uy) - beta * ty) - gamma * dy);
+				cz += mrinv3 * (((djz - alpha3 * uz) - beta * tz) - gamma * dz);
+#endif
 			}
 			fobuf[ii].save(ax, ay, az, jx, jy, jz, 
 					sx, sy, sz, cx, cy, cz);
