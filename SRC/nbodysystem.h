@@ -155,6 +155,8 @@ struct Profile{
 		fprintf(stdout, "prediction bandwidth = %f GB/s\n",
 				bandwidth * 1.e-9);
 #endif
+		fflush(fp);
+		fflush(stdout);
 	}
 
 	static double wtime(){
@@ -501,7 +503,7 @@ struct NbodySystem{
 		}
 	}
 	__attribute__((noinline))
-	void sort_ptcl_dtcache(const int nact, const double dtlim){
+	void sort_ptcl_dtcache(const int nact, const double dtlim, const bool do_set_jp = false){
 		int beg = 0;
 		int end = nact;
 		union{ double d; long l; } m64;
@@ -534,6 +536,11 @@ struct NbodySystem{
 #else
 				std::swap(ptcl[i], ptcl[j]);
 #endif
+				if(do_set_jp){
+					gravity->set_jp(i, ptcl[i]);
+					gravity->set_jp(j, ptcl[j]);
+				}
+
 				++i;
 			}
 breakpoint:
@@ -834,12 +841,15 @@ breakpoint:
 					for(int i=0; i<nact; i++){
 						ptcl[i].correct(force[i], eta, etapow, dtlim);
 						dtbuf[i] = ptcl[i].dt;
+						// set_jp here, updated later when swap(i,j) is called
+						gravity->set_jp(i, ptcl[i]);
 					}
 					prof.end_master(Profile::CORRECT);
 #                 pragma omp master
 					{
 						prof.beg(Profile::SORT, true);
-						sort_ptcl_dtcache(nact, dtlim);
+						// sort_ptcl_dtcache(nact, dtlim);
+						sort_ptcl_dtcache(nact, dtlim, true);
 						this->num_step += nact;
 						this->num_bstep++;
 
@@ -848,6 +858,7 @@ breakpoint:
 						sh_nact  = count_nact(sh_tnext);
 						prof.end(Profile::SORT);
 					}
+#if 0
 #                 pragma omp barrier
 					prof.beg_master(Profile::SET_JP, true);
 #                 pragma omp for nowait
@@ -855,6 +866,7 @@ breakpoint:
 						gravity->set_jp(i, ptcl[i]);
 					}
 					prof.end_master(Profile::SET_JP);
+#endif
 				}else{
 #                 pragma omp master
 					{
@@ -948,6 +960,7 @@ breakpoint:
                 nact_avr, 
                 de_loc, de_glo, 
                 wtime, Gflops);
+		fflush(fp);
 		prof.end(Profile::IO);
 #endif 
 		prev_energy = energy;
