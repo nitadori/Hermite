@@ -3,6 +3,7 @@
 #include "hermite8.h"
 #include "hermite8-k.h"
 
+#if 0
 void Gravity::predict_all_rp(
 		const int nbody, 
 		const double s_tsys, 
@@ -58,6 +59,7 @@ void Gravity::predict_all_rp(
 		pred[i].mass = ptcl[i].mass;
 	}
 }
+#endif
 void Gravity::predict_all_rp_fast_omp(
 		const int nbody, 
 		const double s_tsys, 
@@ -116,6 +118,7 @@ void Gravity::predict_all_rp_fast_omp(
 	}
 }
 
+#if 0
 void Gravity::calc_force_in_range(
 		const int    is,
 		const int    ie,
@@ -290,6 +293,7 @@ void Gravity::calc_force_in_range(
 		cz.storeh(&force[i+1].crk.z);
 	}
 }
+#endif
 void Gravity::calc_force_in_range_fast_omp(
 		const int    is,
 		const int    ie,
