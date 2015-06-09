@@ -110,8 +110,8 @@ struct Gravity{
 		}
 	}
 	~Gravity(){
-		deallocate<GParticle,  256> (nbody);
-		deallocate<GPredictor, 256> (nbody);
+		deallocate<GParticle,  256> (ptcl);
+		deallocate<GPredictor, 256> (pred);
 	}
 
 	static void set_jp_rp(
