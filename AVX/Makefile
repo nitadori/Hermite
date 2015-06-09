@@ -1,10 +1,11 @@
 VPATH = ../SRC
-#CXX = /usr/local/bin/g++
-CXX = g++
+CXX = /usr/local/bin/g++
+#CXX = g++
 CXXFLAGS = -Wall -O2
-CXXFLAGS += -march=core2 -mavx
-#CXXFLAGS += -march=bdver2
+#CXXFLAGS += -march=core2 -mavx
+CXXFLAGS += -march=bdver2
 CXXFLAGS += -fopenmp
+CXXFLAGS += -DFAST_OMP_SYNC
 #CXXFLAGS += -ffast-math
 
 all: cpu-4th cpu-6th cpu-8th avx-4th avx-6th avx-8th

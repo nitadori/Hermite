@@ -148,6 +148,7 @@ struct Gravity{
 	}
 
 	void predict_all(const double tsys){
+#if 0
 #pragma omp parallel for
 		for(int i=0; i<nbody; i++){
 			const double tlast = *((double *)&ptcl[i].vel_time + 3);
@@ -167,6 +168,10 @@ struct Gravity{
 			pred[i].vel = vel;
 			pred[i].acc = acc;
 		}
+#else
+#pragma omp parallel 
+		predict_all_fast_omp(tsys);
+#endif
 	}
 	void predict_all_fast_omp(const double tsys){
 #pragma omp for nowait
@@ -190,6 +195,7 @@ struct Gravity{
 		}
 	}
 
+#if 0
 	void calc_force_in_range(
 			const int    is,
 			const int    ie,
@@ -322,6 +328,7 @@ struct Gravity{
 		}
 #endif
 	}
+#endif
 	void calc_force_in_range_fast_omp(
 			const int    is,
 			const int    ie,
@@ -476,10 +483,15 @@ struct Gravity{
 			const double eps2,
 			Force        force[] )
 	{
+#if 0
 		for(int ii=0; ii<nact; ii+=NIMAX){
 			const int ni = (nact-ii) < NIMAX ? (nact-ii) : NIMAX;
 			calc_force_in_range(ii, ii+ni, eps2, force);
 		}
+#else
+#pragma omp parallel
+		calc_force_on_first_nact_fast_omp(nact, eps2, force);
+#endif
 	}
 	void calc_force_on_first_nact_fast_omp(
 			const int    nact,
