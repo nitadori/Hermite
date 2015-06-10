@@ -98,8 +98,9 @@ struct Gravity{
 		ptr[5][4*al + 3] = 0.0;
 	}
 
-	__attribute__((noinline))
+	// __attribute__((noinline))
 	void predict_all(const double tsys){
+#if 0
 		F64vec8 tnow(tsys);
 		F64vec8 coef(1./2., 1./3., 1./4., 1./5.);
 #pragma omp parallel for
@@ -122,6 +123,10 @@ struct Gravity{
 			pred[i].vel = vel;
 			pred[i].acc = acc;
 		}
+#else
+#pragma omp parallel
+		predict_all_fast_omp(tsys);
+#endif
 	}
 	__attribute__((noinline))
 	void predict_all_fast_omp(const double tsys){
@@ -149,6 +154,7 @@ struct Gravity{
 		}
 	}
 
+#if 0
 	__attribute__((noinline))
 	void calc_force_in_range(
 			const int    is,
@@ -301,6 +307,7 @@ struct Gravity{
 			((__m512d *)(&force[is]))[ii] = sum;
 		} // omp parallel for
 	}
+#endif
 	__attribute__((noinline))
 	void calc_force_in_range_fast_omp(
 			const int    is,
@@ -470,11 +477,16 @@ struct Gravity{
 			const double eps2,
 			Force        force[] )
 	{
+#if 0
 		for(int i=0; i<nact; i+=NIMAX){
 			int ni = (nact-i) < NIMAX ? (nact-i) : NIMAX;
 			if(ni%4) ni += (4-ni%4);
 			calc_force_in_range(i, ni, eps2, force);
 		}
+#else
+#pragma omp parallel
+		calc_force_on_first_nact_fast_omp(nact, eps2, force);
+#endif
 	}
 	void calc_force_on_first_nact_fast_omp(
 			const int    nact,
